@@ -60,7 +60,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { action, workflowId, active, tag, mes, lancamento, receiveData } = await req.json()
+    const { action, workflowId, active, tag, managedTags, mes, lancamento, receiveData } = await req.json()
 
     // Environment variables
     const M7_WEBHOOK_TOKEN = Deno.env.get("M7_WEBHOOK_TOKEN")
@@ -174,31 +174,55 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         }
 
-        // n8n public API v1 does NOT accept tags via PATCH/PUT on the workflow.
-        // Tags are managed through /workflows/{id}/tags with tag IDs.
-        let tagIds: { id: string }[] = []
-
         const wantedTag = typeof tag === 'string' ? tag.trim() : ''
-        if (wantedTag) {
-          // 1. Find existing tag by name
-          const tagsRes = await fetch(`${N8N_BASE_URL}/api/v1/tags?limit=250`, {
+        const managedTagNames = Array.isArray(managedTags)
+          ? managedTags
+              .filter((value): value is string => typeof value === 'string')
+              .map((value) => value.trim().toLowerCase())
+              .filter(Boolean)
+          : []
+        const managedTagsSet = new Set(managedTagNames)
+
+        // The endpoint replaces the full tag list. Read the current tags first so
+        // that changing the dashboard category never removes unrelated n8n tags.
+        const [workflowRes, tagsRes] = await Promise.all([
+          fetch(`${N8N_BASE_URL}/api/v1/workflows/${safeId}`, {
             method: 'GET',
             headers: n8nHeaders,
             signal: controller.signal,
+          }),
+          fetch(`${N8N_BASE_URL}/api/v1/tags?limit=250`, {
+            method: 'GET',
+            headers: n8nHeaders,
+            signal: controller.signal,
+          }),
+        ])
+        if (!workflowRes.ok || !tagsRes.ok) {
+          const status = !workflowRes.ok ? workflowRes.status : tagsRes.status
+          return new Response(JSON.stringify({ error: `n8n tag lookup failed: ${status}` }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
-          if (!tagsRes.ok) {
-            const t = await tagsRes.text()
-            return new Response(JSON.stringify({ error: `n8n tags list failed: ${tagsRes.status} ${t}` }), {
-              status: 502,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            })
-          }
-          const tagsData = await tagsRes.json()
-          let found = (tagsData.data || []).find(
-            (t: any) => String(t.name).trim().toLowerCase() === wantedTag.toLowerCase(),
-          )
+        }
 
-          // 2. Create it if it doesn't exist yet
+        const workflowData = await workflowRes.json()
+        const tagsData = await tagsRes.json()
+        const availableTags = tagsData.data || []
+        const tagById = new Map(availableTags.map((item: any) => [String(item.id), item]))
+        let tagIds = (Array.isArray(workflowData.tags) ? workflowData.tags : [])
+          .map((item: any) => {
+            const id = typeof item === 'string' ? item : item?.id
+            const catalogTag = id ? tagById.get(String(id)) : undefined
+            const name = String(item?.name ?? catalogTag?.name ?? '').trim().toLowerCase()
+            return { id: id ? String(id) : '', name }
+          })
+          .filter((item: { id: string; name: string }) => item.id && !managedTagsSet.has(item.name))
+          .map((item: { id: string }) => ({ id: item.id }))
+
+        if (wantedTag) {
+          let found = availableTags.find(
+            (item: any) => String(item.name).trim().toLowerCase() === wantedTag.toLowerCase(),
+          )
           if (!found) {
             const createRes = await fetch(`${N8N_BASE_URL}/api/v1/tags`, {
               method: 'POST',
@@ -207,19 +231,18 @@ serve(async (req) => {
               signal: controller.signal,
             })
             if (!createRes.ok) {
-              const t = await createRes.text()
-              return new Response(JSON.stringify({ error: `n8n tag create failed: ${createRes.status} ${t}` }), {
+              return new Response(JSON.stringify({ error: `n8n tag create failed: ${createRes.status}` }), {
                 status: 502,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
               })
             }
             found = await createRes.json()
           }
-
-          tagIds = [{ id: found.id }]
+          tagIds = [...tagIds, { id: String(found.id) }]
         }
 
-        // 3. Replace the workflow's tags (empty array removes all)
+        tagIds = tagIds.filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index)
+
         const response = await fetch(`${N8N_BASE_URL}/api/v1/workflows/${safeId}/tags`, {
           method: 'PUT',
           headers: n8nHeaders,

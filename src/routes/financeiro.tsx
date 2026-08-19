@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import logoAsset from "@/assets/logo-v2.png.asset.json";
 import { toast } from "sonner";
 
 type FinanceData = {
@@ -110,6 +109,12 @@ function FinanceiroComponent() {
   const { user, session, loading: authLoading, signOut } = useAuth();
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    if (!authLoading && !session) {
+      navigate({ to: "/login", search: {} as any });
+    }
+  }, [authLoading, navigate, session]);
+
   const { data: financeData, isLoading, error, refetch } = useQuery({
     queryKey: ["finance-dashboard", selectedMonth],
     queryFn: async () => {
@@ -120,6 +125,9 @@ function FinanceiroComponent() {
       return data as FinanceData;
     },
     enabled: !!session,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const uniqueServices = useMemo(() => {
@@ -263,11 +271,19 @@ function FinanceiroComponent() {
     setIsEditLancamentoOpen(true);
   };
 
+  if (authLoading || !session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-zinc-950 text-white font-sans overflow-hidden">
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-zinc-900 border-r border-zinc-800 transition-transform lg:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-16 items-center px-6 border-b border-zinc-800">
-          <img src={logoAsset.url} alt="Logo" className="h-8" />
+          <img src="/logo-v2.png" alt="Logo Gestão M7 IA" className="h-8" />
         </div>
         <nav className="p-4 space-y-2">
           <a href="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800">
