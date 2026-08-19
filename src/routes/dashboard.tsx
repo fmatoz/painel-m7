@@ -15,6 +15,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Home,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,6 +86,7 @@ function DashboardComponent() {
   });
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusSort, setStatusSort] = useState<"active-first" | "inactive-first" | null>(null);
   const navigate = useNavigate();
   const { user, session, loading: authLoading, signOut } = useAuth();
   const queryClient = useQueryClient();
@@ -210,20 +214,30 @@ function DashboardComponent() {
     navigate({ to: "/login", search: {} as any });
   };
 
-  const filteredWorkflows = workflows.filter((wf) => {
-    const matchesFilter =
-      filter === "todos" ? true :
-      filter === "ativo" ? wf.active :
-      filter === "inativo" ? !wf.active :
-      (wf.tags?.some(tag => {
-        // Normalização rigorosa para comparação: trim e lowercase
-        const normalizedTag = tag.trim().toLowerCase();
-        const normalizedFilter = filter.trim().toLowerCase();
-        return normalizedTag === normalizedFilter;
-      }) ?? false);
-    const matchesSearch = wf.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filteredWorkflows = workflows
+    .filter((wf) => {
+      const matchesFilter =
+        filter === "todos" ? true :
+        filter === "ativo" ? wf.active :
+        filter === "inativo" ? !wf.active :
+        (wf.tags?.some(tag => {
+          // Normalização rigorosa para comparação: trim e lowercase
+          const normalizedTag = tag.trim().toLowerCase();
+          const normalizedFilter = filter.trim().toLowerCase();
+          return normalizedTag === normalizedFilter;
+        }) ?? false);
+      const matchesSearch = wf.name.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesFilter && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (!statusSort || a.active === b.active) return 0;
+      if (statusSort === "active-first") return a.active ? -1 : 1;
+      return a.active ? 1 : -1;
+    });
+
+  const toggleStatusSort = () => {
+    setStatusSort((current) => current === "active-first" ? "inactive-first" : "active-first");
+  };
 
   const stats = {
     total: workflows.length,
@@ -399,7 +413,29 @@ function DashboardComponent() {
                       <tr>
                         <th className="px-6 py-4">Nome</th>
                         <th className="px-6 py-4">ID</th>
-                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4" aria-sort={
+                          statusSort === "active-first"
+                            ? "ascending"
+                            : statusSort === "inactive-first"
+                              ? "descending"
+                              : "none"
+                        }>
+                          <button
+                            type="button"
+                            onClick={toggleStatusSort}
+                            className="inline-flex items-center gap-2 rounded text-left hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            title={statusSort === "active-first" ? "Mostrar inativos primeiro" : "Mostrar ativos primeiro"}
+                          >
+                            Status
+                            {statusSort === "active-first" ? (
+                              <ArrowUp className="h-4 w-4 text-blue-400" />
+                            ) : statusSort === "inactive-first" ? (
+                              <ArrowDown className="h-4 w-4 text-blue-400" />
+                            ) : (
+                              <ArrowUpDown className="h-4 w-4 text-zinc-500" />
+                            )}
+                          </button>
+                        </th>
                         <th className="px-6 py-4">Aba</th>
                         <th className="px-6 py-4 text-right">Ações</th>
                       </tr>
