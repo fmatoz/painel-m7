@@ -57,28 +57,18 @@ type CreateTabDialogState = {
   name: string;
 };
 
+const defaultTabs = [
+  { id: "todos", name: "Todos" },
+  { id: "favoritos", name: "Favoritos" },
+];
+
 export const Route = createFileRoute("/dashboard")({
   component: DashboardComponent,
 });
 
 function DashboardComponent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [customTabs, setCustomTabs] = useState<{ id: string; name: string }[]>(() => {
-    const saved = localStorage.getItem("dashboard_tabs");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Filtrar "prospecção" se ainda existir no localStorage
-        return parsed.filter((tab: any) => tab.id !== "prospecção");
-      } catch (e) {
-        console.error("Error parsing dashboard_tabs", e);
-      }
-    }
-    return [
-      { id: "todos", name: "Todos" },
-      { id: "favoritos", name: "Favoritos" }
-    ];
-  });
+  const [customTabs, setCustomTabs] = useState<{ id: string; name: string }[]>(defaultTabs);
   const [filter, setFilter] = useState<string>("todos");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     isOpen: false,
@@ -92,42 +82,49 @@ function DashboardComponent() {
     name: "",
   });
   
-  useEffect(() => {
-    // Filtrar abas duplicadas ou indesejadas que possam vir do localStorage antigo
-    const uniqueTabs = customTabs.filter((tab, index, self) => 
-      index === self.findIndex((t) => t.id === tab.id)
-    );
-    if (uniqueTabs.length !== customTabs.length) {
-      setCustomTabs(uniqueTabs);
-    }
-    localStorage.setItem("dashboard_tabs", JSON.stringify(uniqueTabs));
-  }, [customTabs]);
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   const { user, session, loading: authLoading, signOut } = useAuth();
   const queryClient = useQueryClient();
+
+  const { data: savedTabs = [] } = useQuery({
+    queryKey: ["dashboard-tabs", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dashboard_tabs")
+        .select("id, name")
+        .order("created_at");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!session,
+  });
+
+  useEffect(() => {
+    setCustomTabs([...defaultTabs, ...savedTabs]);
+  }, [savedTabs]);
+
+  const createTabMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase.from("dashboard_tabs").insert({ name });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard-tabs", user?.id] }),
+  });
+
+  const deleteTabMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("dashboard_tabs").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard-tabs", user?.id] }),
+  });
 
   useEffect(() => {
     if (!authLoading && !session) {
       navigate({ to: "/login", search: {} as any });
     }
   }, [session, authLoading, navigate]);
-
-  useEffect(() => {
-    if (session) {
-      const runDiagnose = async () => {
-        try {
-          const { data, error } = await supabase.functions.invoke("n8n-workflows", {
-            body: { action: "diagnose" },
-          });
-          console.log("DIAGNOSIS_RESULT:", JSON.stringify(data || error));
-        } catch (e) {
-          console.error("DIAGNOSIS_EXCEPTION:", e);
-        }
-      };
-      runDiagnose();
-    }
-  }, [session]);
 
   const { data: workflows = [], isLoading, error, refetch } = useQuery({
     queryKey: ["n8n-workflows"],
@@ -158,6 +155,9 @@ function DashboardComponent() {
     },
     enabled: !!session,
     retry: false,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const toggleStatusMutation = useMutation({
@@ -183,7 +183,10 @@ function DashboardComponent() {
         body: { 
           action: "update-tag",
           workflowId: id,
-          tag: tag
+          tag,
+          managedTags: customTabs
+            .filter((tab) => tab.id !== "todos")
+            .map((tab) => tab.name),
         },
       });
       if (error) throw error;
@@ -322,9 +325,9 @@ function DashboardComponent() {
               {customTabs.map((tab) => (
                 <div key={tab.id} className="relative group">
                   <button
-                    onClick={() => setFilter(tab.id)}
+                    onClick={() => setFilter(tab.id === "todos" ? "todos" : tab.name)}
                     className={`px-4 py-2 rounded-lg text-sm capitalize flex items-center gap-2 ${
-                      filter === tab.id
+                      filter === (tab.id === "todos" ? "todos" : tab.name)
                         ? "bg-blue-600 text-white"
                         : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800"
                     }`}
@@ -340,8 +343,8 @@ function DashboardComponent() {
                           title: "Excluir Aba",
                           description: `Tem certeza que deseja excluir a aba "${tab.name}"?`,
                           onConfirm: () => {
-                            setCustomTabs(customTabs.filter((t) => t.id !== tab.id));
-                            if (filter === tab.id) setFilter("todos");
+                            deleteTabMutation.mutate(tab.id);
+                            if (filter === tab.name) setFilter("todos");
                             setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
                           },
                           variant: "destructive",
@@ -618,8 +621,8 @@ function DashboardComponent() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && createTabDialog.name.trim()) {
                   const name = createTabDialog.name.trim();
-                  if (!customTabs.find(t => t.id === name.toLowerCase())) {
-                    setCustomTabs([...customTabs, { id: name.toLowerCase(), name }]);
+                  if (!customTabs.some((tab) => tab.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+                    createTabMutation.mutate(name);
                   }
                   setCreateTabDialog({ isOpen: false, name: "" });
                 }
@@ -635,11 +638,11 @@ function DashboardComponent() {
               Cancelar
             </Button>
             <Button
-              disabled={!createTabDialog.name.trim()}
+              disabled={!createTabDialog.name.trim() || createTabMutation.isPending}
               onClick={() => {
                 const name = createTabDialog.name.trim();
-                if (!customTabs.find(t => t.id === name.toLowerCase())) {
-                  setCustomTabs([...customTabs, { id: name.toLowerCase(), name }]);
+                if (!customTabs.some((tab) => tab.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+                  createTabMutation.mutate(name);
                 }
                 setCreateTabDialog({ isOpen: false, name: "" });
               }}

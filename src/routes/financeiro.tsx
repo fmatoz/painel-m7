@@ -110,6 +110,12 @@ function FinanceiroComponent() {
   const { user, session, loading: authLoading, signOut } = useAuth();
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    if (!authLoading && !session) {
+      navigate({ to: "/login", search: {} as any });
+    }
+  }, [authLoading, navigate, session]);
+
   const { data: financeData, isLoading, error, refetch } = useQuery({
     queryKey: ["finance-dashboard", selectedMonth],
     queryFn: async () => {
@@ -120,6 +126,9 @@ function FinanceiroComponent() {
       return data as FinanceData;
     },
     enabled: !!session,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const uniqueServices = useMemo(() => {
@@ -262,6 +271,14 @@ function FinanceiroComponent() {
     });
     setIsEditLancamentoOpen(true);
   };
+
+  if (authLoading || !session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-zinc-950 text-white font-sans overflow-hidden">
