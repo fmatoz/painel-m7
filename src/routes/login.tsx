@@ -40,7 +40,7 @@ function LoginComponent() {
       if (nextTarget) {
         window.location.href = nextTarget;
       } else {
-        navigate({ to: "/dashboard" });
+        navigate({ to: "/inicio" });
       }
     }
   }, [session, authLoading, navigate, nextTarget]);
@@ -76,7 +76,7 @@ function LoginComponent() {
       if (nextTarget) {
         window.location.href = nextTarget;
       } else {
-        navigate({ to: "/dashboard" });
+        navigate({ to: "/inicio" });
       }
     } catch (err) {
       setError("Erro de conexão. Verifique sua internet.");
