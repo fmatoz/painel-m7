@@ -3,7 +3,7 @@
   "short_name": "Painel M7",
   "description": "Central operacional da M7 para workflows e gestão financeira.",
   "id": "/",
-  "start_url": "/dashboard",
+  "start_url": "/inicio",
   "scope": "/",
   "display": "standalone",
   "background_color": "#09090b",
@@ -23,6 +23,10 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Início",
+      "url": "/inicio"
+    },
     {
       "name": "Workflows",
       "url": "/dashboard"

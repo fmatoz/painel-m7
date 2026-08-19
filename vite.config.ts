@@ -7,6 +7,10 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
+// The MCP plugin currently compares Windows paths using POSIX separators and
+// aborts local builds. Lovable and Vercel run on Linux, where it remains enabled.
+const mcpPlugins = process.platform === "win32" ? [] : [mcpPlugin()];
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -14,6 +18,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [mcpPlugin()],
+    plugins: mcpPlugins,
   },
 });

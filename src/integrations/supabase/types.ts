@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      home_workspaces: {
+        Row: {
+          focus_text: string
+          goals: Json
+          notes: string
+          priorities: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          focus_text?: string
+          goals?: Json
+          notes?: string
+          priorities?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          focus_text?: string
+          goals?: Json
+          notes?: string
+          priorities?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dashboard_tabs: {
         Row: {
           created_at: string

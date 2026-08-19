@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Search,
   Filter,
+  Home,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -286,6 +287,10 @@ function FinanceiroComponent() {
           <img src="/logo-v2.png" alt="Logo Gestão M7 IA" className="h-8" />
         </div>
         <nav className="p-4 space-y-2">
+          <a href="/inicio" className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white">
+            <Home className="w-5 h-5" />
+            Início
+          </a>
           <a href="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800">
             <LayoutDashboard className="w-5 h-5" />
             Workflows
