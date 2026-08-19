@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { Lock, Mail, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import logoAsset from "@/assets/logo-v2.png.asset.json";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -99,7 +98,7 @@ function LoginComponent() {
       <div className="w-full max-w-md space-y-8 rounded-2xl bg-zinc-900 p-8 shadow-2xl border border-zinc-800">
         <div className="flex flex-col items-center space-y-2">
           <div className="w-24 h-24 mb-2">
-            <img src={logoAsset.url} alt="Gestão M7 IA" className="w-full h-full object-contain" />
+            <img src="/logo-v2.png" alt="Gestão M7 IA" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Painel de Automações</h1>
           <p className="text-sm text-zinc-400">

@@ -33,7 +33,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import logoAsset from "@/assets/logo-v2.png.asset.json";
 
 type Workflow = {
   id: string;
@@ -240,7 +239,7 @@ function DashboardComponent() {
         }`}
       >
         <div className="flex h-16 items-center justify-between px-6 border-b border-zinc-800">
-          <img src={logoAsset.url} alt="Logo" className="h-10 object-contain" />
+          <img src="/logo-v2.png" alt="Logo Gestão M7 IA" className="h-10 object-contain" />
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden">
             <X className="w-6 h-6 text-zinc-400" />
           </button>
