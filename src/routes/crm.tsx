@@ -38,6 +38,8 @@ type Activity = Tables<"crm_activities">;
 type Stage = Lead["stage"];
 
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
+const CRM_WHATSAPP_URL =
+  "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/whatsapp";
 
 async function crmApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
   const response = await fetch(CRM_API_URL, {
@@ -49,6 +51,17 @@ async function crmApi<T>(token: string, payload: Record<string, unknown>): Promi
   const result = (await response.json()) as { ok?: boolean; data?: T; error?: string };
   if (!result.ok) throw new Error(result.error || "Não foi possível concluir a operação.");
   return result.data as T;
+}
+
+async function sendLeadToGroup(token: string, leadId: string): Promise<void> {
+  const response = await fetch(CRM_WHATSAPP_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+    body: JSON.stringify({ token, leadId }),
+  });
+  if (!response.ok) throw new Error(`WhatsApp indisponível (${response.status})`);
+  const result = (await response.json()) as { ok?: boolean; error?: string };
+  if (!result.ok) throw new Error(result.error || "Não foi possível enviar o lead ao grupo.");
 }
 
 const stages: { id: Stage; label: string; color: string }[] = [
@@ -125,14 +138,12 @@ function CrmComponent() {
 
   const sendLead = useMutation({
     mutationFn: async (lead: Lead) => {
-      return crmApi<undefined>(session!.access_token, {
-        action: "command",
-        commandType: "send_to_group",
-        leadId: lead.id,
-      });
+      return sendLeadToGroup(session!.access_token, lead.id);
     },
-    onSuccess: () =>
-      toast.success("Lead adicionado à fila do WhatsApp. O envio ocorre em até um minuto."),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
+      toast.success("Lead enviado ao grupo pela Ester.");
+    },
     onError: () => toast.error("Não foi possível enviar o lead ao grupo."),
   });
 
