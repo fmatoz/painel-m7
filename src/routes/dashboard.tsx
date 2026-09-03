@@ -18,6 +18,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Columns3,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +85,7 @@ function DashboardComponent() {
     isOpen: false,
     name: "",
   });
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusSort, setStatusSort] = useState<"active-first" | "inactive-first" | null>(null);
   const navigate = useNavigate();
@@ -130,13 +131,18 @@ function DashboardComponent() {
     }
   }, [session, authLoading, navigate]);
 
-  const { data: workflows = [], isLoading, error, refetch } = useQuery({
+  const {
+    data: workflows = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["n8n-workflows"],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("n8n-workflows", {
-          body: { action: "list" },
-        });
-      
+        body: { action: "list" },
+      });
+
       if (error) {
         if (error.status === 401) {
           await signOut();
@@ -151,7 +157,7 @@ function DashboardComponent() {
         tags: Array.isArray(wf.tags)
           ? (wf.tags as unknown[])
               .map((t) =>
-                typeof t === "string" ? t : ((t as { name?: string } | null)?.name ?? "")
+                typeof t === "string" ? t : ((t as { name?: string } | null)?.name ?? ""),
               )
               .filter((t): t is string => t.length > 0)
           : [],
@@ -167,10 +173,10 @@ function DashboardComponent() {
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
       const { data, error } = await supabase.functions.invoke("n8n-workflows", {
-        body: { 
+        body: {
           action: "toggle",
           workflowId: id,
-          active: active
+          active: active,
         },
       });
       if (error) throw error;
@@ -184,13 +190,11 @@ function DashboardComponent() {
   const updateTagMutation = useMutation({
     mutationFn: async ({ id, tag }: { id: string; tag: string }) => {
       const { data, error } = await supabase.functions.invoke("n8n-workflows", {
-        body: { 
+        body: {
           action: "update-tag",
           workflowId: id,
           tag,
-          managedTags: customTabs
-            .filter((tab) => tab.id !== "todos")
-            .map((tab) => tab.name),
+          managedTags: customTabs.filter((tab) => tab.id !== "todos").map((tab) => tab.name),
         },
       });
       if (error) throw error;
@@ -217,15 +221,18 @@ function DashboardComponent() {
   const filteredWorkflows = workflows
     .filter((wf) => {
       const matchesFilter =
-        filter === "todos" ? true :
-        filter === "ativo" ? wf.active :
-        filter === "inativo" ? !wf.active :
-        (wf.tags?.some(tag => {
-          // Normalização rigorosa para comparação: trim e lowercase
-          const normalizedTag = tag.trim().toLowerCase();
-          const normalizedFilter = filter.trim().toLowerCase();
-          return normalizedTag === normalizedFilter;
-        }) ?? false);
+        filter === "todos"
+          ? true
+          : filter === "ativo"
+            ? wf.active
+            : filter === "inativo"
+              ? !wf.active
+              : (wf.tags?.some((tag) => {
+                  // Normalização rigorosa para comparação: trim e lowercase
+                  const normalizedTag = tag.trim().toLowerCase();
+                  const normalizedFilter = filter.trim().toLowerCase();
+                  return normalizedTag === normalizedFilter;
+                }) ?? false);
       const matchesSearch = wf.name.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesFilter && matchesSearch;
     })
@@ -236,7 +243,7 @@ function DashboardComponent() {
     });
 
   const toggleStatusSort = () => {
-    setStatusSort((current) => current === "active-first" ? "inactive-first" : "active-first");
+    setStatusSort((current) => (current === "active-first" ? "inactive-first" : "active-first"));
   };
 
   const stats = {
@@ -259,20 +266,36 @@ function DashboardComponent() {
             <X className="w-6 h-6 text-zinc-400" />
           </button>
         </div>
-          <nav className="p-4 space-y-2">
-            <a href="/inicio" className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white">
-              <Home className="w-5 h-5" />
-              Início
-            </a>
-            <a href="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-lg bg-zinc-800 text-white">
-              <LayoutDashboard className="w-5 h-5" />
-              Workflows
-            </a>
-            <a href="/financeiro" className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white">
-              <LayoutDashboard className="w-5 h-5" />
-              Financeiro
-            </a>
-          </nav>
+        <nav className="p-4 space-y-2">
+          <a
+            href="/inicio"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          >
+            <Home className="w-5 h-5" />
+            Início
+          </a>
+          <a
+            href="/dashboard"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-zinc-800 text-white"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Workflows
+          </a>
+          <a
+            href="/crm"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          >
+            <Columns3 className="w-5 h-5" />
+            CRM
+          </a>
+          <a
+            href="/financeiro"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Financeiro
+          </a>
+        </nav>
       </aside>
 
       {/* Main Content */}
@@ -320,7 +343,10 @@ function DashboardComponent() {
               { label: "Ativos", value: stats.ativos },
               { label: "Inativos", value: stats.inativos },
             ].map((card) => (
-              <div key={card.label} className="p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-sm">
+              <div
+                key={card.label}
+                className="p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-sm"
+              >
                 <p className="text-sm text-zinc-400">{card.label}</p>
                 <p className="text-3xl font-bold mt-2">{card.value}</p>
               </div>
@@ -389,8 +415,8 @@ function DashboardComponent() {
             ) : error ? (
               <div className="p-10 text-center space-y-4">
                 <p className="text-red-400">
-                  {(error as any).status === 403 
-                    ? "Usuário não autorizado para gerenciar workflows" 
+                  {(error as any).status === 403
+                    ? "Usuário não autorizado para gerenciar workflows"
                     : "Falha ao carregar workflows do n8n"}
                 </p>
                 <button
@@ -413,18 +439,25 @@ function DashboardComponent() {
                       <tr>
                         <th className="px-6 py-4">Nome</th>
                         <th className="px-6 py-4">ID</th>
-                        <th className="px-6 py-4" aria-sort={
-                          statusSort === "active-first"
-                            ? "ascending"
-                            : statusSort === "inactive-first"
-                              ? "descending"
-                              : "none"
-                        }>
+                        <th
+                          className="px-6 py-4"
+                          aria-sort={
+                            statusSort === "active-first"
+                              ? "ascending"
+                              : statusSort === "inactive-first"
+                                ? "descending"
+                                : "none"
+                          }
+                        >
                           <button
                             type="button"
                             onClick={toggleStatusSort}
                             className="inline-flex items-center gap-2 rounded text-left hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                            title={statusSort === "active-first" ? "Mostrar inativos primeiro" : "Mostrar ativos primeiro"}
+                            title={
+                              statusSort === "active-first"
+                                ? "Mostrar inativos primeiro"
+                                : "Mostrar ativos primeiro"
+                            }
                           >
                             Status
                             {statusSort === "active-first" ? (
@@ -446,20 +479,31 @@ function DashboardComponent() {
                           <td className="px-6 py-4 font-medium text-white">{wf.name}</td>
                           <td className="px-6 py-4 text-xs font-mono">{wf.id}</td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${wf.active ? "bg-green-950 text-green-400" : "bg-zinc-800 text-zinc-400"}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${wf.active ? "bg-green-500" : "bg-zinc-500"}`} />
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${wf.active ? "bg-green-950 text-green-400" : "bg-zinc-800 text-zinc-400"}`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${wf.active ? "bg-green-500" : "bg-zinc-500"}`}
+                              />
                               {wf.active ? "ativo" : "inativo"}
                             </span>
                           </td>
                           <td className="px-6 py-4">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 px-2 text-zinc-400 hover:text-white">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 px-2 text-zinc-400 hover:text-white"
+                                >
                                   <Tag className="w-4 h-4 mr-2" />
                                   {wf.tags?.[0] || "Sem aba"}
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="bg-zinc-900 border-zinc-800 text-zinc-300">
+                              <DropdownMenuContent
+                                align="start"
+                                className="bg-zinc-900 border-zinc-800 text-zinc-300"
+                              >
                                 {customTabs
                                   .filter((t) => !["todos", "ativo", "inativo"].includes(t.id))
                                   .map((tab) => (
@@ -485,7 +529,7 @@ function DashboardComponent() {
                             </DropdownMenu>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button 
+                            <button
                               onClick={() => {
                                 setConfirmDialog({
                                   isOpen: true,
@@ -500,17 +544,22 @@ function DashboardComponent() {
                               }}
                               disabled={toggleStatusMutation.isPending}
                               className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
-                                wf.active 
-                                  ? "bg-zinc-800 hover:bg-red-900/30 text-zinc-400 hover:text-red-400" 
+                                wf.active
+                                  ? "bg-zinc-800 hover:bg-red-900/30 text-zinc-400 hover:text-red-400"
                                   : "bg-green-600/10 hover:bg-green-600/20 text-green-500"
                               }`}
                             >
-                              {toggleStatusMutation.isPending && toggleStatusMutation.variables?.id === wf.id ? (
+                              {toggleStatusMutation.isPending &&
+                              toggleStatusMutation.variables?.id === wf.id ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               ) : wf.active ? (
-                                <><PowerOff className="w-3.5 h-3.5" /> Desativar</>
+                                <>
+                                  <PowerOff className="w-3.5 h-3.5" /> Desativar
+                                </>
                               ) : (
-                                <><Power className="w-3.5 h-3.5" /> Ativar</>
+                                <>
+                                  <Power className="w-3.5 h-3.5" /> Ativar
+                                </>
                               )}
                             </button>
                           </td>
@@ -529,21 +578,32 @@ function DashboardComponent() {
                           <p className="font-medium text-white truncate">{wf.name}</p>
                           <p className="text-[10px] font-mono text-zinc-500 truncate">{wf.id}</p>
                         </div>
-                        <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${wf.active ? "bg-green-950 text-green-400" : "bg-zinc-800 text-zinc-400"}`}>
-                          <span className={`w-1 h-1 rounded-full ${wf.active ? "bg-green-500" : "bg-zinc-500"}`} />
+                        <span
+                          className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${wf.active ? "bg-green-950 text-green-400" : "bg-zinc-800 text-zinc-400"}`}
+                        >
+                          <span
+                            className={`w-1 h-1 rounded-full ${wf.active ? "bg-green-500" : "bg-zinc-500"}`}
+                          />
                           {wf.active ? "ativo" : "inativo"}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between pt-1 gap-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-400 h-10">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-400 h-10"
+                            >
                               <Tag className="w-4 h-4 mr-2" />
                               {wf.tags?.[0] || "Aba"}
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="bg-zinc-900 border-zinc-800 text-zinc-300">
+                          <DropdownMenuContent
+                            align="start"
+                            className="bg-zinc-900 border-zinc-800 text-zinc-300"
+                          >
                             {customTabs
                               .filter((t) => !["todos", "ativo", "inativo"].includes(t.id))
                               .map((tab) => (
@@ -568,7 +628,7 @@ function DashboardComponent() {
                           </DropdownMenuContent>
                         </DropdownMenu>
 
-                        <button 
+                        <button
                           onClick={() => {
                             setConfirmDialog({
                               isOpen: true,
@@ -583,17 +643,22 @@ function DashboardComponent() {
                           }}
                           disabled={toggleStatusMutation.isPending}
                           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 h-10 ${
-                            wf.active 
-                              ? "bg-zinc-800 text-zinc-400 active:bg-red-900/30 active:text-red-400" 
+                            wf.active
+                              ? "bg-zinc-800 text-zinc-400 active:bg-red-900/30 active:text-red-400"
                               : "bg-green-600/10 text-green-500 active:bg-green-600/20"
                           }`}
                         >
-                          {toggleStatusMutation.isPending && toggleStatusMutation.variables?.id === wf.id ? (
+                          {toggleStatusMutation.isPending &&
+                          toggleStatusMutation.variables?.id === wf.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : wf.active ? (
-                            <><PowerOff className="w-4 h-4" /> Off</>
+                            <>
+                              <PowerOff className="w-4 h-4" /> Off
+                            </>
                           ) : (
-                            <><Power className="w-4 h-4" /> On</>
+                            <>
+                              <Power className="w-4 h-4" /> On
+                            </>
                           )}
                         </button>
                       </div>
@@ -607,7 +672,10 @@ function DashboardComponent() {
       </main>
 
       {/* Confirmation Dialog */}
-      <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}>
+      <Dialog
+        open={confirmDialog.isOpen}
+        onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}
+      >
         <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -625,7 +693,7 @@ function DashboardComponent() {
           <DialogFooter className="gap-2">
             <Button
               variant="ghost"
-              onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
               className="text-zinc-400 hover:text-white hover:bg-zinc-800"
             >
               Cancelar
@@ -642,7 +710,10 @@ function DashboardComponent() {
       </Dialog>
 
       {/* Create Tab Dialog */}
-      <Dialog open={createTabDialog.isOpen} onOpenChange={(open) => setCreateTabDialog(prev => ({ ...prev, isOpen: open }))}>
+      <Dialog
+        open={createTabDialog.isOpen}
+        onOpenChange={(open) => setCreateTabDialog((prev) => ({ ...prev, isOpen: open }))}
+      >
         <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
           <DialogHeader>
             <DialogTitle>Criar Nova Aba</DialogTitle>
@@ -655,13 +726,17 @@ function DashboardComponent() {
               type="text"
               placeholder="Nome da aba..."
               value={createTabDialog.name}
-              onChange={(e) => setCreateTabDialog(prev => ({ ...prev, name: e.target.value }))}
+              onChange={(e) => setCreateTabDialog((prev) => ({ ...prev, name: e.target.value }))}
               className="w-full h-11 rounded-lg border border-zinc-700 bg-zinc-950 px-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && createTabDialog.name.trim()) {
+                if (e.key === "Enter" && createTabDialog.name.trim()) {
                   const name = createTabDialog.name.trim();
-                  if (!customTabs.some((tab) => tab.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+                  if (
+                    !customTabs.some(
+                      (tab) => tab.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+                    )
+                  ) {
                     createTabMutation.mutate(name);
                   }
                   setCreateTabDialog({ isOpen: false, name: "" });
@@ -681,7 +756,11 @@ function DashboardComponent() {
               disabled={!createTabDialog.name.trim() || createTabMutation.isPending}
               onClick={() => {
                 const name = createTabDialog.name.trim();
-                if (!customTabs.some((tab) => tab.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+                if (
+                  !customTabs.some(
+                    (tab) => tab.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+                  )
+                ) {
                   createTabMutation.mutate(name);
                 }
                 setCreateTabDialog({ isOpen: false, name: "" });

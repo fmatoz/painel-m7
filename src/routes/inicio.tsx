@@ -264,6 +264,13 @@ function InicioComponent() {
             Workflows
           </a>
           <a
+            href="/crm"
+            className="flex items-center gap-3 rounded-lg px-4 py-3 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          >
+            <LayoutDashboard className="h-5 w-5" />
+            CRM
+          </a>
+          <a
             href="/financeiro"
             className="flex items-center gap-3 rounded-lg px-4 py-3 text-zinc-400 hover:bg-zinc-800 hover:text-white"
           >
