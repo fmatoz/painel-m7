@@ -19,7 +19,6 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -37,6 +36,20 @@ import { toast } from "sonner";
 type Lead = Tables<"crm_leads">;
 type Activity = Tables<"crm_activities">;
 type Stage = Lead["stage"];
+
+const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
+
+async function crmApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch(CRM_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+    body: JSON.stringify({ token, ...payload }),
+  });
+  if (!response.ok) throw new Error(`CRM indisponível (${response.status})`);
+  const result = (await response.json()) as { ok?: boolean; data?: T; error?: string };
+  if (!result.ok) throw new Error(result.error || "Não foi possível concluir a operação.");
+  return result.data as T;
+}
 
 const stages: { id: Stage; label: string; color: string }[] = [
   { id: "novo", label: "Novo lead", color: "bg-sky-400" },
@@ -84,39 +97,12 @@ function CrmComponent() {
   const leadsQuery = useQuery({
     queryKey: ["crm-leads"],
     enabled: !!session,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_leads")
-        .select("*")
-        .order("score", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => crmApi<Lead[]>(session!.access_token, { action: "list" }),
   });
-
-  useEffect(() => {
-    if (!session) return;
-    const channel = supabase
-      .channel("crm-leads-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "crm_leads" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
-      })
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [session, queryClient]);
 
   const updateLead = useMutation({
     mutationFn: async ({ id, changes }: { id: string; changes: Partial<Lead> }) => {
-      const { data, error } = await supabase
-        .from("crm_leads")
-        .update(changes)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return crmApi<Lead>(session!.access_token, { action: "update", leadId: id, changes });
     },
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
@@ -127,16 +113,10 @@ function CrmComponent() {
 
   const syncLeads = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_commands")
-        .insert({ command_type: "sync", created_by: user?.id })
-        .select("id")
-        .single();
-      if (error) {
-        if (error.code === "23505") return { queued: true };
-        throw error;
-      }
-      return data;
+      return crmApi<undefined>(session!.access_token, {
+        action: "command",
+        commandType: "sync",
+      });
     },
     onSuccess: () =>
       toast.success("Sincronização solicitada. Os cards serão atualizados em até um minuto."),
@@ -145,16 +125,11 @@ function CrmComponent() {
 
   const sendLead = useMutation({
     mutationFn: async (lead: Lead) => {
-      const { data, error } = await supabase
-        .from("crm_commands")
-        .insert({ command_type: "send_to_group", lead_id: lead.id, created_by: user?.id })
-        .select("id")
-        .single();
-      if (error) {
-        if (error.code === "23505") return { queued: true };
-        throw error;
-      }
-      return data;
+      return crmApi<undefined>(session!.access_token, {
+        action: "command",
+        commandType: "send_to_group",
+        leadId: lead.id,
+      });
     },
     onSuccess: () =>
       toast.success("Lead adicionado à fila do WhatsApp. O envio ocorre em até um minuto."),
@@ -313,6 +288,7 @@ function CrmComponent() {
         onSend={() => selected && sendLead.mutate(selected)}
         saving={updateLead.isPending}
         sending={sendLead.isPending}
+        accessToken={session.access_token}
       />
     </div>
   );
@@ -383,6 +359,7 @@ function LeadDialog({
   onSend,
   saving,
   sending,
+  accessToken,
 }: {
   lead: Lead | null;
   onClose: () => void;
@@ -390,20 +367,17 @@ function LeadDialog({
   onSend: () => void;
   saving: boolean;
   sending: boolean;
+  accessToken: string;
 }) {
   const [draft, setDraft] = useState<Partial<Lead>>({});
   const [activities, setActivities] = useState<Activity[]>([]);
   useEffect(() => {
     setDraft(lead ?? {});
     if (!lead) return;
-    void supabase
-      .from("crm_activities")
-      .select("*")
-      .eq("lead_id", lead.id)
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => setActivities(data ?? []));
-  }, [lead]);
+    void crmApi<Activity[]>(accessToken, { action: "activities", leadId: lead.id })
+      .then((data) => setActivities(data ?? []))
+      .catch(() => setActivities([]));
+  }, [lead, accessToken]);
   const field = (key: keyof Lead, value: unknown) =>
     setDraft((current) => ({ ...current, [key]: value }));
   return (
