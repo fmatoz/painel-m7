@@ -74,6 +74,34 @@ const stages: { id: Stage; label: string; color: string }[] = [
   { id: "perdido", label: "Perdido", color: "bg-zinc-500" },
 ];
 
+type PipelineColumn = {
+  key: string;
+  stage: Stage;
+  label: string;
+  color: string;
+  sourceGroup?: "maps" | "cnpj";
+};
+
+const pipelineColumns: PipelineColumn[] = [
+  {
+    key: "novo-maps",
+    stage: "novo",
+    label: "Novo lead · Maps",
+    color: "bg-blue-500",
+    sourceGroup: "maps",
+  },
+  {
+    key: "novo-cnpj",
+    stage: "novo",
+    label: "Novo lead · CNPJ",
+    color: "bg-fuchsia-500",
+    sourceGroup: "cnpj",
+  },
+  ...stages
+    .filter((stage) => stage.id !== "novo")
+    .map((stage) => ({ key: stage.id, stage: stage.id, label: stage.label, color: stage.color })),
+];
+
 const sourceStyle: Record<string, string> = {
   Maps: "border-l-blue-500",
   CNPJ: "border-l-fuchsia-500",
@@ -91,6 +119,13 @@ function when(value: string | null) {
   if (!value) return "Sem data";
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(
     new Date(value),
+  );
+}
+
+function hasOwnWebsite(value: string | null) {
+  if (!value?.trim()) return false;
+  return !/(instagram\.com|facebook\.com|fb\.com|linktr\.ee|bit\.ly|wa\.me|whatsapp\.com|tiktok\.com|maps\.app\.goo\.gl|google\.com\/maps)/i.test(
+    value,
   );
 }
 
@@ -259,22 +294,29 @@ function CrmComponent() {
               Não foi possível carregar o CRM. Confirme se a migração do banco foi publicada.
             </div>
           ) : (
-            <div className="grid min-w-[1840px] grid-cols-7 gap-3 pb-4">
-              {stages.map((stage) => {
-                const stageLeads = filtered.filter((lead) => lead.stage === stage.id);
+            <div className="grid min-w-[2100px] grid-cols-8 gap-3 pb-4">
+              {pipelineColumns.map((column) => {
+                const stageLeads = filtered.filter((lead) => {
+                  if (lead.stage !== column.stage) return false;
+                  if (column.sourceGroup === "maps") {
+                    return lead.source === "Maps" || lead.source === "Maps + CNPJ";
+                  }
+                  if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
+                  return true;
+                });
                 return (
                   <section
-                    key={stage.id}
+                    key={column.key}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       const id = e.dataTransfer.getData("text/lead-id");
-                      if (id) updateLead.mutate({ id, changes: { stage: stage.id } });
+                      if (id) updateLead.mutate({ id, changes: { stage: column.stage } });
                     }}
                     className="min-h-[68vh] rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
                   >
                     <div className="mb-3 flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${stage.color}`} />
-                      <h3 className="font-semibold">{stage.label}</h3>
+                      <span className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
+                      <h3 className="font-semibold">{column.label}</h3>
                       <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
                         {stageLeads.length}
                       </span>
@@ -328,6 +370,8 @@ function Nav({
 }
 
 function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
+  const mapsOnly = lead.source === "Maps";
+  const ownWebsite = hasOwnWebsite(lead.website);
   return (
     <button
       draggable
@@ -344,15 +388,26 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           {Number(lead.score).toFixed(1)}
         </span>
       </div>
-      <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-400">
-        <UserRound className="h-3.5 w-3.5" />
-        <span className="truncate">{lead.partner_name || "Sócio não informado"}</span>
-      </div>
+      {mapsOnly ? (
+        <div
+          className={`mt-2 flex items-center gap-1.5 text-xs ${ownWebsite ? "text-emerald-300" : "text-amber-300"}`}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          <span>{ownWebsite ? "Com site" : "Sem site"}</span>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-400">
+          <UserRound className="h-3.5 w-3.5" />
+          <span className="truncate">{lead.partner_name || "Sócio não informado"}</span>
+        </div>
+      )}
       <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-zinc-500">
         <span className="truncate">{lead.source}</span>
         <span className="truncate text-right">{lead.city || "Cidade não informada"}</span>
       </div>
-      <p className="mt-2 text-xs font-medium text-zinc-300">{money(lead.capital_social)}</p>
+      {!mapsOnly && (
+        <p className="mt-2 text-xs font-medium text-zinc-300">{money(lead.capital_social)}</p>
+      )}
       {lead.next_action_at && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300">
           <CalendarClock className="h-3 w-3" />
@@ -410,21 +465,32 @@ function LeadDialog({
             </DialogHeader>
             <div className="grid gap-5 md:grid-cols-2">
               <div className="space-y-4">
-                <Info
-                  icon={<UserRound />}
-                  label="Sócio / responsável"
-                  value={lead.partner_name || "Não informado"}
-                />
+                {lead.source !== "Maps" && (
+                  <Info
+                    icon={<UserRound />}
+                    label="Sócio / responsável"
+                    value={lead.partner_name || "Não informado"}
+                  />
+                )}
                 <Info
                   icon={<Phone />}
                   label="Telefone / WhatsApp"
                   value={lead.phone || "Não informado"}
                 />
-                <Info
-                  icon={<Building2 />}
-                  label="Capital social"
-                  value={money(lead.capital_social)}
-                />
+                {lead.source !== "Maps" && (
+                  <Info
+                    icon={<Building2 />}
+                    label="Capital social"
+                    value={money(lead.capital_social)}
+                  />
+                )}
+                {lead.source === "Maps" && (
+                  <p
+                    className={`rounded-lg p-3 text-sm ${hasOwnWebsite(lead.website) ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"}`}
+                  >
+                    {hasOwnWebsite(lead.website) ? "Possui site próprio" : "Não possui site próprio"}
+                  </p>
+                )}
                 {lead.address && (
                   <Info icon={<Building2 />} label="Endereço" value={lead.address} />
                 )}
