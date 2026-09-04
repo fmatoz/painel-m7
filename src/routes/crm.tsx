@@ -173,6 +173,9 @@ function CrmComponent() {
     queryKey: ["crm-leads"],
     enabled: !!session,
     queryFn: () => crmApi<Lead[]>(session!.access_token, { action: "list" }),
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const updateLead = useMutation({
