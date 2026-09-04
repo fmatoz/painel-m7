@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Loader2,
   LogOut,
+  Mail,
   Menu,
   MessageCircle,
   Phone,
@@ -365,6 +366,10 @@ function CrmComponent() {
                     return true;
                   })
                   .sort((a, b) => {
+                    const assignmentDifference =
+                      Number(Boolean(b.assigned_to)) - Number(Boolean(a.assigned_to));
+                    if (assignmentDifference !== 0) return assignmentDifference;
+
                     const scoreDifference = Number(b.score) - Number(a.score);
                     if (scoreDifference !== 0) return scoreDifference;
 
@@ -581,6 +586,9 @@ function LeadDialog({
                   label="Telefone / WhatsApp"
                   value={lead.phone || "Não informado"}
                 />
+                {lead.source !== "Maps" && (
+                  <Info icon={<Mail />} label="E-mail" value={lead.email || "Não informado"} />
+                )}
                 {lead.source !== "Maps" && (
                   <Info
                     icon={<Building2 />}
