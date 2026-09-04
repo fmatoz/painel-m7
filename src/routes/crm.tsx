@@ -365,13 +365,14 @@ function CrmComponent() {
                     return true;
                   })
                   .sort((a, b) => {
-                    if (
-                      column.stage === "novo" &&
-                      Boolean(a.assigned_to) !== Boolean(b.assigned_to)
-                    ) {
-                      return a.assigned_to ? 1 : -1;
-                    }
-                    return Number(b.score) - Number(a.score);
+                    const scoreDifference = Number(b.score) - Number(a.score);
+                    if (scoreDifference !== 0) return scoreDifference;
+
+                    const createdDifference =
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                    if (createdDifference !== 0) return createdDifference;
+
+                    return a.id.localeCompare(b.id);
                   });
                 return (
                   <section
