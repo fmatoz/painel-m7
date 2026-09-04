@@ -71,6 +71,7 @@ const stages: { id: Stage; label: string; color: string }[] = [
   { id: "reuniao", label: "Reunião", color: "bg-amber-400" },
   { id: "proposta", label: "Proposta", color: "bg-orange-400" },
   { id: "cliente", label: "Cliente", color: "bg-emerald-400" },
+  { id: "fora_do_perfil", label: "Fora do perfil", color: "bg-rose-400" },
   { id: "perdido", label: "Perdido", color: "bg-zinc-500" },
 ];
 
@@ -294,7 +295,7 @@ function CrmComponent() {
               Não foi possível carregar o CRM. Confirme se a migração do banco foi publicada.
             </div>
           ) : (
-            <div className="grid min-w-[2100px] grid-cols-8 gap-3 pb-4">
+            <div className="grid min-w-[2360px] grid-cols-9 gap-3 pb-4">
               {pipelineColumns.map((column) => {
                 const stageLeads = filtered.filter((lead) => {
                   if (lead.stage !== column.stage) return false;
