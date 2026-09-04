@@ -8,6 +8,48 @@ export type Database = {
   };
   public: {
     Tables: {
+      app_users: {
+        Row: {
+          active: boolean;
+          can_crm: boolean;
+          can_financeiro: boolean;
+          can_inicio: boolean;
+          can_workflows: boolean;
+          created_at: string;
+          email: string;
+          full_name: string;
+          is_admin: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          active?: boolean;
+          can_crm?: boolean;
+          can_financeiro?: boolean;
+          can_inicio?: boolean;
+          can_workflows?: boolean;
+          created_at?: string;
+          email: string;
+          full_name?: string;
+          is_admin?: boolean;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          active?: boolean;
+          can_crm?: boolean;
+          can_financeiro?: boolean;
+          can_inicio?: boolean;
+          can_workflows?: boolean;
+          created_at?: string;
+          email?: string;
+          full_name?: string;
+          is_admin?: boolean;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       crm_activities: {
         Row: {
           activity_type: string;

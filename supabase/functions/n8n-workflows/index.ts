@@ -24,9 +24,7 @@ serve(async (req) => {
     // Get secrets
     const N8N_BASE_URL = Deno.env.get("N8N_BASE_URL");
     const N8N_API_KEY = Deno.env.get("N8N_API_KEY");
-    const ADMIN_EMAILS = Deno.env.get("ADMIN_EMAILS");
-
-    if (!N8N_BASE_URL || !N8N_API_KEY || !ADMIN_EMAILS) {
+    if (!N8N_BASE_URL || !N8N_API_KEY) {
       console.error("Missing environment variables");
       return new Response(JSON.stringify({ error: "Server configuration error" }), {
         status: 500,
@@ -53,18 +51,22 @@ serve(async (req) => {
       });
     }
 
-    // Check if email is authorized
-    const adminList = ADMIN_EMAILS.split(",").map((email) => email.trim().toLowerCase());
-    if (!adminList.includes(user.email?.toLowerCase() ?? "")) {
-      return new Response(JSON.stringify({ error: "Forbidden: Email not authorized" }), {
+    // Parse request body
+    const { action, workflowId, active, tag, managedTags, mes, lancamento, receiveData, leadId } =
+      await req.json();
+
+    const accessArea = String(action).startsWith("finance-") ? "can_financeiro" : "can_workflows";
+    const { data: access } = await supabaseClient
+      .from("app_users")
+      .select(`active, ${accessArea}`)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!access?.active || access[accessArea] !== true) {
+      return new Response(JSON.stringify({ error: "Forbidden: Access not granted" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Parse request body
-    const { action, workflowId, active, tag, managedTags, mes, lancamento, receiveData, leadId } =
-      await req.json();
 
     // Environment variables
     const M7_WEBHOOK_TOKEN = Deno.env.get("M7_WEBHOOK_TOKEN");

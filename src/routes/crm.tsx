@@ -23,6 +23,7 @@ import {
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { AppSidebar } from "@/components/app-sidebar";
 import {
   Dialog,
   DialogContent,
@@ -33,14 +34,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useAppSidebar } from "@/hooks/use-app-sidebar";
+import { useAppAccess } from "@/hooks/use-access";
 
 type Lead = Tables<"crm_leads">;
 type Activity = Tables<"crm_activities">;
 type Stage = Lead["stage"];
 
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
-const CRM_WHATSAPP_URL =
-  "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/whatsapp";
+const CRM_WHATSAPP_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/whatsapp";
 
 async function crmApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
   const response = await fetch(CRM_API_URL, {
@@ -146,17 +148,23 @@ function instagramUrl(value: string | null | undefined) {
 }
 
 function CrmComponent() {
-  const [sidebar, setSidebar] = useState(false);
+  const sidebar = useAppSidebar();
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("Todos");
   const [selected, setSelected] = useState<Lead | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, session, loading, signOut } = useAuth();
+  const access = useAppAccess();
 
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/login", search: {} as never });
   }, [loading, session, navigate]);
+  useEffect(() => {
+    if (!access.loading && session && !access.can("crm")) {
+      window.location.href = access.firstAllowedPath;
+    }
+  }, [access, session]);
 
   const leadsQuery = useQuery({
     queryKey: ["crm-leads"],
@@ -211,7 +219,7 @@ function CrmComponent() {
     });
   }, [leadsQuery.data, search, source]);
 
-  if (loading || !session)
+  if (loading || access.loading || !session || !access.can("crm"))
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -220,26 +228,13 @@ function CrmComponent() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950 text-white">
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-zinc-800 bg-zinc-900 transition-transform lg:translate-x-0 ${sidebar ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <div className="flex h-16 items-center justify-between border-b border-zinc-800 px-6">
-          <img src="/logo-v2.png" alt="Gestão M7" className="h-10 object-contain" />
-          <button onClick={() => setSidebar(false)} className="lg:hidden">
-            <X className="h-6 w-6 text-zinc-400" />
-          </button>
-        </div>
-        <nav className="space-y-2 p-4">
-          <Nav href="/inicio" icon={<Home />} label="Início" />
-          <Nav href="/dashboard" icon={<LayoutDashboard />} label="Workflows" />
-          <Nav href="/crm" icon={<Columns3 />} label="CRM" active />
-          <Nav href="/financeiro" icon={<TrendingUp />} label="Financeiro" />
-        </nav>
-      </aside>
+      <AppSidebar active="crm" {...sidebar} />
 
-      <main className="flex h-full min-w-0 flex-1 flex-col lg:pl-64">
+      <main
+        className={`flex h-full min-w-0 flex-1 flex-col transition-[padding] duration-200 ${sidebar.collapsed ? "lg:pl-20" : "lg:pl-64"}`}
+      >
         <header className="flex h-16 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950/90 px-4 backdrop-blur md:px-6">
-          <button onClick={() => setSidebar(true)} className="lg:hidden">
+          <button onClick={() => sidebar.setMobileOpen(true)} className="lg:hidden">
             <Menu className="h-6 w-6 text-zinc-400" />
           </button>
           <div>
@@ -520,7 +515,9 @@ function LeadDialog({
                   <p
                     className={`rounded-lg p-3 text-sm ${hasOwnWebsite(lead.website) ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"}`}
                   >
-                    {hasOwnWebsite(lead.website) ? "Possui site próprio" : "Não possui site próprio"}
+                    {hasOwnWebsite(lead.website)
+                      ? "Possui site próprio"
+                      : "Não possui site próprio"}
                   </p>
                 )}
                 {lead.address && (
@@ -531,9 +528,7 @@ function LeadDialog({
                     {lead.website && (
                       <a
                         href={
-                          lead.website.startsWith("http")
-                            ? lead.website
-                            : `https://${lead.website}`
+                          lead.website.startsWith("http") ? lead.website : `https://${lead.website}`
                         }
                         target="_blank"
                         rel="noreferrer"

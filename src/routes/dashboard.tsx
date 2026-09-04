@@ -32,6 +32,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { AppSidebar } from "@/components/app-sidebar";
+import { useAppSidebar } from "@/hooks/use-app-sidebar";
+import { useAppAccess } from "@/hooks/use-access";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,7 +74,7 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function DashboardComponent() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebar = useAppSidebar();
   const [customTabs, setCustomTabs] = useState<{ id: string; name: string }[]>(defaultTabs);
   const [filter, setFilter] = useState<string>("todos");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
@@ -90,6 +93,7 @@ function DashboardComponent() {
   const [statusSort, setStatusSort] = useState<"active-first" | "inactive-first" | null>(null);
   const navigate = useNavigate();
   const { user, session, loading: authLoading, signOut } = useAuth();
+  const access = useAppAccess();
   const queryClient = useQueryClient();
 
   const { data: savedTabs = [] } = useQuery({
@@ -130,6 +134,11 @@ function DashboardComponent() {
       navigate({ to: "/login", search: {} as any });
     }
   }, [session, authLoading, navigate]);
+  useEffect(() => {
+    if (!access.loading && session && !access.can("workflows")) {
+      window.location.href = access.firstAllowedPath;
+    }
+  }, [access, session]);
 
   const {
     data: workflows = [],
@@ -205,7 +214,7 @@ function DashboardComponent() {
     },
   });
 
-  if (authLoading || !session) {
+  if (authLoading || access.loading || !session || !access.can("workflows")) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
         <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
@@ -254,54 +263,14 @@ function DashboardComponent() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950 text-white">
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-zinc-900 border-r border-zinc-800 transition-transform lg:translate-x-0 ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex h-16 items-center justify-between px-6 border-b border-zinc-800">
-          <img src="/logo-v2.png" alt="Logo Gestão M7 IA" className="h-10 object-contain" />
-          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden">
-            <X className="w-6 h-6 text-zinc-400" />
-          </button>
-        </div>
-        <nav className="p-4 space-y-2">
-          <a
-            href="/inicio"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <Home className="w-5 h-5" />
-            Início
-          </a>
-          <a
-            href="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-zinc-800 text-white"
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            Workflows
-          </a>
-          <a
-            href="/crm"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <Columns3 className="w-5 h-5" />
-            CRM
-          </a>
-          <a
-            href="/financeiro"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            Financeiro
-          </a>
-        </nav>
-      </aside>
+      <AppSidebar active="workflows" {...sidebar} />
 
       {/* Main Content */}
-      <main className="flex-1 lg:pl-64 flex flex-col h-full min-w-0">
+      <main
+        className={`flex-1 flex flex-col h-full min-w-0 transition-[padding] duration-200 ${sidebar.collapsed ? "lg:pl-20" : "lg:pl-64"}`}
+      >
         <header className="sticky top-0 h-16 flex items-center justify-between px-6 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800">
-          <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden">
+          <button onClick={() => sidebar.setMobileOpen(true)} className="lg:hidden">
             <Menu className="w-6 h-6 text-zinc-400" />
           </button>
           <div className="flex items-center gap-4 ml-auto">

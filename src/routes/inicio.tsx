@@ -21,6 +21,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { Progress } from "@/components/ui/progress";
+import { AppSidebar } from "@/components/app-sidebar";
+import { useAppSidebar } from "@/hooks/use-app-sidebar";
+import { useAppAccess } from "@/hooks/use-access";
 
 type Priority = {
   id: string;
@@ -100,7 +103,8 @@ function normalizeGoals(value: Json): Goal[] {
 function InicioComponent() {
   const navigate = useNavigate();
   const { user, session, loading: authLoading, signOut } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebar = useAppSidebar();
+  const access = useAppAccess();
   const [workspace, setWorkspace] = useState<HomeWorkspace>(emptyWorkspace);
   const [isDirty, setIsDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("loading");
@@ -111,6 +115,11 @@ function InicioComponent() {
       navigate({ to: "/login", search: { next: undefined } });
     }
   }, [authLoading, navigate, session]);
+  useEffect(() => {
+    if (!access.loading && session && !access.can("inicio")) {
+      window.location.href = access.firstAllowedPath;
+    }
+  }, [access, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -217,7 +226,7 @@ function InicioComponent() {
     navigate({ to: "/login", search: { next: undefined } });
   };
 
-  if (authLoading || !session) {
+  if (authLoading || access.loading || !session || !access.can("inicio")) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -227,63 +236,14 @@ function InicioComponent() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950 text-white">
-      {isSidebarOpen && (
-        <button
-          aria-label="Fechar menu"
-          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      <AppSidebar active="inicio" {...sidebar} />
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-zinc-800 bg-zinc-900 transition-transform lg:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+      <main
+        className={`flex h-full min-w-0 flex-1 flex-col transition-[padding] duration-200 ${sidebar.collapsed ? "lg:pl-20" : "lg:pl-64"}`}
       >
-        <div className="flex h-16 items-center justify-between border-b border-zinc-800 px-6">
-          <img src="/logo-v2.png" alt="Logo Gestão M7 IA" className="h-10 object-contain" />
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="lg:hidden"
-            aria-label="Fechar menu"
-          >
-            <X className="h-6 w-6 text-zinc-400" />
-          </button>
-        </div>
-        <nav className="space-y-2 p-4">
-          <a
-            href="/inicio"
-            className="flex items-center gap-3 rounded-lg bg-blue-600 px-4 py-3 font-medium text-white"
-          >
-            <Home className="h-5 w-5" />
-            Início
-          </a>
-          <a
-            href="/dashboard"
-            className="flex items-center gap-3 rounded-lg px-4 py-3 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <LayoutDashboard className="h-5 w-5" />
-            Workflows
-          </a>
-          <a
-            href="/crm"
-            className="flex items-center gap-3 rounded-lg px-4 py-3 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <LayoutDashboard className="h-5 w-5" />
-            CRM
-          </a>
-          <a
-            href="/financeiro"
-            className="flex items-center gap-3 rounded-lg px-4 py-3 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <TrendingUp className="h-5 w-5" />
-            Financeiro
-          </a>
-        </nav>
-      </aside>
-
-      <main className="flex h-full min-w-0 flex-1 flex-col lg:pl-64">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/85 px-4 backdrop-blur md:px-6">
           <button
-            onClick={() => setIsSidebarOpen(true)}
+            onClick={() => sidebar.setMobileOpen(true)}
             className="lg:hidden"
             aria-label="Abrir menu"
           >

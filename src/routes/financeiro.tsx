@@ -41,6 +41,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { AppSidebar } from "@/components/app-sidebar";
+import { useAppSidebar } from "@/hooks/use-app-sidebar";
+import { useAppAccess } from "@/hooks/use-access";
 
 type FinanceData = {
   competencia: string;
@@ -79,7 +82,7 @@ export const Route = createFileRoute("/financeiro")({
 });
 
 function FinanceiroComponent() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebar = useAppSidebar();
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -110,6 +113,7 @@ function FinanceiroComponent() {
 
   const navigate = useNavigate();
   const { user, session, loading: authLoading, signOut } = useAuth();
+  const access = useAppAccess();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -117,6 +121,11 @@ function FinanceiroComponent() {
       navigate({ to: "/login", search: {} as any });
     }
   }, [authLoading, navigate, session]);
+  useEffect(() => {
+    if (!access.loading && session && !access.can("financeiro")) {
+      window.location.href = access.firstAllowedPath;
+    }
+  }, [access, session]);
 
   const {
     data: financeData,
@@ -284,7 +293,7 @@ function FinanceiroComponent() {
     setIsEditLancamentoOpen(true);
   };
 
-  if (authLoading || !session) {
+  if (authLoading || access.loading || !session || !access.can("financeiro")) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -294,49 +303,24 @@ function FinanceiroComponent() {
 
   return (
     <div className="flex h-screen bg-zinc-950 text-white font-sans overflow-hidden">
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-zinc-900 border-r border-zinc-800 transition-transform lg:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <div className="flex h-16 items-center px-6 border-b border-zinc-800">
-          <img src="/logo-v2.png" alt="Logo Gestão M7 IA" className="h-8" />
-        </div>
-        <nav className="p-4 space-y-2">
-          <a
-            href="/inicio"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            <Home className="w-5 h-5" />
-            Início
-          </a>
-          <a
-            href="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800"
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            Workflows
-          </a>
-          <a
-            href="/crm"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800"
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            CRM
-          </a>
-          <a
-            href="/financeiro"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-600 text-white font-medium"
-          >
-            <TrendingUp className="w-5 h-5" />
-            Financeiro
-          </a>
-        </nav>
-      </aside>
+      <AppSidebar active="financeiro" {...sidebar} />
 
-      <main className="flex-1 lg:pl-64 flex flex-col h-full overflow-hidden">
+      <main
+        className={`flex-1 flex flex-col h-full overflow-hidden transition-[padding] duration-200 ${sidebar.collapsed ? "lg:pl-20" : "lg:pl-64"}`}
+      >
         <header className="h-20 flex items-center justify-between px-6 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur shrink-0">
-          <div>
-            <h1 className="text-xl font-bold">Financeiro</h1>
-            <p className="text-sm text-zinc-400">Visão clara do mês da Gestão M7</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => sidebar.setMobileOpen(true)}
+              className="lg:hidden"
+              aria-label="Abrir menu"
+            >
+              <Menu className="h-6 w-6 text-zinc-400" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold">Financeiro</h1>
+              <p className="text-sm text-zinc-400">Visão clara do mês da Gestão M7</p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-zinc-500 hidden md:inline">{user?.email}</span>
