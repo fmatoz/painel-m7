@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AtSign,
   Building2,
   CalendarClock,
   Columns3,
@@ -134,6 +135,14 @@ function googleMapsUrl(lead: Lead) {
   const location = lead.address || [lead.city, lead.state].filter(Boolean).join(" - ");
   const query = [lead.company_name, location].filter(Boolean).join(", ");
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function instagramUrl(value: string | null | undefined) {
+  const clean = value?.trim();
+  if (!clean) return "";
+  if (/^https?:\/\//i.test(clean)) return clean;
+  if (/^(www\.)?instagram\.com\//i.test(clean)) return `https://${clean}`;
+  return `https://www.instagram.com/${clean.replace(/^@/, "").replace(/^\/+|\/+$/g, "")}`;
 }
 
 function CrmComponent() {
@@ -396,6 +405,11 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
     >
       <div className="flex items-start gap-2">
         <p className="line-clamp-2 flex-1 text-sm font-semibold">{lead.company_name}</p>
+        {lead.instagram_url && (
+          <span title="Instagram encontrado" className="mt-1 text-pink-300">
+            <AtSign className="h-4 w-4" />
+          </span>
+        )}
         <span className="rounded-md bg-blue-500/15 px-2 py-1 text-xs font-bold text-blue-300">
           {Number(lead.score).toFixed(1)}
         </span>
@@ -548,6 +562,36 @@ function LeadDialog({
                     avaliações
                   </p>
                 )}
+                <div className="space-y-1.5">
+                  <label htmlFor={`instagram-${lead.id}`} className="text-xs text-zinc-400">
+                    Instagram
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      id={`instagram-${lead.id}`}
+                      type="text"
+                      inputMode="url"
+                      placeholder="Link ou @usuario"
+                      value={String(draft.instagram_url ?? "")}
+                      onChange={(e) => field("instagram_url", e.target.value)}
+                      className="border-zinc-700 bg-zinc-950"
+                    />
+                    <a
+                      href={instagramUrl(String(draft.instagram_url ?? "")) || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-disabled={!String(draft.instagram_url ?? "").trim()}
+                      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
+                        String(draft.instagram_url ?? "").trim()
+                          ? "bg-zinc-800 text-pink-300 hover:border-zinc-600 hover:bg-zinc-700"
+                          : "pointer-events-none bg-zinc-900 text-zinc-600"
+                      }`}
+                    >
+                      <AtSign className="h-4 w-4" />
+                      Abrir
+                    </a>
+                  </div>
+                </div>
                 {lead.cnpj && (
                   <p className="rounded-lg bg-fuchsia-500/10 p-3 text-sm text-fuchsia-200">
                     CNPJ {lead.cnpj}
@@ -622,6 +666,7 @@ function LeadDialog({
                     service_interest: draft.service_interest,
                     next_action: draft.next_action,
                     next_action_at: draft.next_action_at,
+                    instagram_url: draft.instagram_url,
                     notes: draft.notes,
                   })
                 }
