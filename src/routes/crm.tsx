@@ -378,7 +378,6 @@ function Nav({
 
 function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
   const mapsOnly = lead.source === "Maps";
-  const hasMaps = mapsOnly || lead.source === "Maps + CNPJ";
   const ownWebsite = hasOwnWebsite(lead.website);
   return (
     <div
@@ -402,11 +401,17 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
         </span>
       </div>
       {mapsOnly ? (
-        <div
-          className={`mt-2 flex items-center gap-1.5 text-xs ${ownWebsite ? "text-emerald-300" : "text-amber-300"}`}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          <span>{ownWebsite ? "Com site" : "Sem site"}</span>
+        <div className="mt-2 space-y-1.5 text-xs">
+          <div
+            className={`flex items-center gap-1.5 ${ownWebsite ? "text-emerald-300" : "text-amber-300"}`}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span>{ownWebsite ? "Com site" : "Sem site"}</span>
+          </div>
+          <p className="text-zinc-400">
+            Nota {lead.maps_rating ?? "-"} · {lead.maps_reviews ?? 0}{" "}
+            {lead.maps_reviews === 1 ? "avaliação" : "avaliações"}
+          </p>
         </div>
       ) : (
         <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-400">
@@ -420,19 +425,6 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
       </div>
       {!mapsOnly && (
         <p className="mt-2 text-xs font-medium text-zinc-300">{money(lead.capital_social)}</p>
-      )}
-      {hasMaps && (
-        <a
-          href={googleMapsUrl(lead)}
-          target="_blank"
-          rel="noreferrer"
-          draggable={false}
-          onClick={(e) => e.stopPropagation()}
-          className="mt-2 flex w-fit items-center gap-1 text-[11px] font-medium text-blue-300 hover:text-blue-200 hover:underline"
-        >
-          <ExternalLink className="h-3 w-3" />
-          Abrir no Maps
-        </a>
       )}
       {lead.next_action_at && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300">
@@ -520,18 +512,35 @@ function LeadDialog({
                 {lead.address && (
                   <Info icon={<Building2 />} label="Endereço" value={lead.address} />
                 )}
-                {lead.website && (
-                  <a
-                    href={
-                      lead.website.startsWith("http") ? lead.website : `https://${lead.website}`
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-400 hover:underline"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Abrir site
-                  </a>
+                {(lead.website || lead.source === "Maps" || lead.source === "Maps + CNPJ") && (
+                  <div className="flex flex-wrap gap-2">
+                    {lead.website && (
+                      <a
+                        href={
+                          lead.website.startsWith("http")
+                            ? lead.website
+                            : `https://${lead.website}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Abrir site
+                      </a>
+                    )}
+                    {(lead.source === "Maps" || lead.source === "Maps + CNPJ") && (
+                      <a
+                        href={googleMapsUrl(lead)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Abrir no Maps
+                      </a>
+                    )}
+                  </div>
                 )}
                 {(lead.maps_rating != null || lead.maps_reviews != null) && (
                   <p className="rounded-lg bg-blue-500/10 p-3 text-sm text-blue-200">
