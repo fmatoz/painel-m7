@@ -130,6 +130,12 @@ function hasOwnWebsite(value: string | null) {
   );
 }
 
+function googleMapsUrl(lead: Lead) {
+  const location = lead.address || [lead.city, lead.state].filter(Boolean).join(" - ");
+  const query = [lead.company_name, location].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 function CrmComponent() {
   const [sidebar, setSidebar] = useState(false);
   const [search, setSearch] = useState("");
@@ -372,15 +378,21 @@ function Nav({
 
 function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
   const mapsOnly = lead.source === "Maps";
+  const hasMaps = mapsOnly || lead.source === "Maps + CNPJ";
   const ownWebsite = hasOwnWebsite(lead.website);
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/lead-id", lead.id);
         e.dataTransfer.effectAllowed = "move";
       }}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onOpen();
+      }}
       className={`w-full cursor-grab rounded-lg border border-l-4 border-zinc-700 bg-zinc-950 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-600 ${sourceStyle[lead.source] ?? "border-l-zinc-500"}`}
     >
       <div className="flex items-start gap-2">
@@ -409,13 +421,26 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
       {!mapsOnly && (
         <p className="mt-2 text-xs font-medium text-zinc-300">{money(lead.capital_social)}</p>
       )}
+      {hasMaps && (
+        <a
+          href={googleMapsUrl(lead)}
+          target="_blank"
+          rel="noreferrer"
+          draggable={false}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-2 flex w-fit items-center gap-1 text-[11px] font-medium text-blue-300 hover:text-blue-200 hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Abrir no Maps
+        </a>
+      )}
       {lead.next_action_at && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300">
           <CalendarClock className="h-3 w-3" />
           {when(lead.next_action_at)}
         </p>
       )}
-    </button>
+    </div>
   );
 }
 
