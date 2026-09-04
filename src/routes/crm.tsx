@@ -50,6 +50,7 @@ async function crmApi<T>(token: string, payload: Record<string, unknown>): Promi
   const response = await fetch(CRM_API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=UTF-8" },
+    cache: "no-store",
     body: JSON.stringify({ token, ...payload }),
   });
   if (!response.ok) throw new Error(`CRM indisponível (${response.status})`);
@@ -174,9 +175,22 @@ function CrmComponent() {
     enabled: !!session,
     queryFn: () => crmApi<Lead[]>(session!.access_token, { action: "list" }),
     refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!selected || !leadsQuery.data) return;
+    const freshLead = leadsQuery.data.find((lead) => lead.id === selected.id);
+    if (
+      freshLead &&
+      (freshLead.assigned_to !== selected.assigned_to ||
+        freshLead.assigned_to_name !== selected.assigned_to_name ||
+        freshLead.stage !== selected.stage)
+    ) {
+      setSelected(freshLead);
+    }
+  }, [leadsQuery.data, selected]);
 
   const updateLead = useMutation({
     mutationFn: async ({ id, changes }: { id: string; changes: Partial<Lead> }) => {
