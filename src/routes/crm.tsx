@@ -71,8 +71,8 @@ const stages: { id: Stage; label: string; color: string }[] = [
   { id: "reuniao", label: "Reunião", color: "bg-amber-400" },
   { id: "proposta", label: "Proposta", color: "bg-orange-400" },
   { id: "cliente", label: "Cliente", color: "bg-emerald-400" },
-  { id: "fora_do_perfil", label: "Fora do perfil", color: "bg-rose-400" },
   { id: "perdido", label: "Perdido", color: "bg-zinc-500" },
+  { id: "fora_do_perfil", label: "Fora do perfil", color: "bg-rose-400" },
 ];
 
 type PipelineColumn = {
