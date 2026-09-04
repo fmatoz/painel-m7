@@ -13,11 +13,14 @@ const permissionField: Record<Exclude<AccessArea, "usuarios">, keyof AppUser> = 
   financeiro: "can_financeiro",
 };
 
+const OWNER_EMAIL = "gestaom7ia@gmail.com";
+
 export function useAppAccess() {
   const { user, loading: authLoading } = useAuth();
+  const isOwner = user?.email?.toLowerCase() === OWNER_EMAIL;
   const query = useQuery({
     queryKey: ["app-access", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isOwner,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("app_users")
@@ -29,7 +32,23 @@ export function useAppAccess() {
     },
   });
 
-  const profile = query.data ?? null;
+  const ownerProfile: AppUser | null =
+    user && isOwner
+      ? {
+          user_id: user.id,
+          email: OWNER_EMAIL,
+          full_name: String(user.user_metadata?.full_name ?? "Felipe"),
+          is_admin: true,
+          can_inicio: true,
+          can_workflows: true,
+          can_crm: true,
+          can_financeiro: true,
+          active: true,
+          created_at: user.created_at,
+          updated_at: new Date().toISOString(),
+        }
+      : null;
+  const profile = ownerProfile ?? query.data ?? null;
   const can = (area: AccessArea) => {
     if (!profile?.active) return false;
     if (area === "usuarios") return profile.is_admin;
@@ -50,7 +69,7 @@ export function useAppAccess() {
     profile,
     can,
     firstAllowedPath,
-    loading: authLoading || (!!user && query.isLoading),
+    loading: authLoading || (!!user && !isOwner && query.isLoading),
     error: query.error,
   };
 }
