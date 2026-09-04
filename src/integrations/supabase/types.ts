@@ -116,7 +116,10 @@ export type Database = {
       crm_leads: {
         Row: {
           address: string;
+          assigned_at: string | null;
           assigned_to: string | null;
+          assigned_to_email: string;
+          assigned_to_name: string;
           capital_social: number | null;
           city: string;
           cnae: string;
@@ -148,7 +151,10 @@ export type Database = {
         };
         Insert: {
           address?: string;
+          assigned_at?: string | null;
           assigned_to?: string | null;
+          assigned_to_email?: string;
+          assigned_to_name?: string;
           capital_social?: number | null;
           city?: string;
           cnae?: string;
@@ -179,7 +185,10 @@ export type Database = {
         };
         Update: {
           address?: string;
+          assigned_at?: string | null;
           assigned_to?: string | null;
+          assigned_to_email?: string;
+          assigned_to_name?: string;
           capital_social?: number | null;
           city?: string;
           cnae?: string;

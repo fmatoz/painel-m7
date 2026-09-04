@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   TrendingUp,
+  UserCheck,
   UserRound,
   X,
 } from "lucide-react";
@@ -151,6 +152,7 @@ function CrmComponent() {
   const sidebar = useAppSidebar();
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("Todos");
+  const [assignee, setAssignee] = useState("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -183,6 +185,22 @@ function CrmComponent() {
     onError: () => toast.error("Não foi possível salvar a alteração."),
   });
 
+  const assignLead = useMutation({
+    mutationFn: async ({ id, mode }: { id: string; mode: "claim" | "release" | "takeover" }) =>
+      crmApi<Lead>(session!.access_token, { action: "assign", leadId: id, assignmentMode: mode }),
+    onSuccess: (lead) => {
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
+      setSelected((current) => (current?.id === lead.id ? lead : current));
+      toast.success(
+        lead.assigned_to_name ? `Lead atribuído a ${lead.assigned_to_name}.` : "Lead liberado.",
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível alterar o responsável.",
+      ),
+  });
+
   const syncLeads = useMutation({
     mutationFn: async () => {
       return crmApi<undefined>(session!.access_token, {
@@ -210,14 +228,29 @@ function CrmComponent() {
     const needle = search.trim().toLowerCase();
     return (leadsQuery.data ?? []).filter((lead) => {
       const matchesSource = source === "Todos" || lead.source === source;
+      const matchesAssignee =
+        assignee === "all" ||
+        (assignee === "mine" && lead.assigned_to === user?.id) ||
+        (assignee === "unassigned" && !lead.assigned_to) ||
+        lead.assigned_to === assignee;
       const matchesText =
         !needle ||
         [lead.company_name, lead.partner_name, lead.city, lead.phone, lead.cnpj].some((value) =>
           value?.toLowerCase().includes(needle),
         );
-      return matchesSource && matchesText;
+      return matchesSource && matchesAssignee && matchesText;
     });
-  }, [leadsQuery.data, search, source]);
+  }, [leadsQuery.data, search, source, assignee, user?.id]);
+
+  const assignees = useMemo(() => {
+    const people = new Map<string, string>();
+    for (const lead of leadsQuery.data ?? []) {
+      if (lead.assigned_to && lead.assigned_to_name) {
+        people.set(lead.assigned_to, lead.assigned_to_name);
+      }
+    }
+    return [...people.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [leadsQuery.data]);
 
   if (loading || access.loading || !session || !access.can("crm"))
     return (
@@ -283,6 +316,21 @@ function CrmComponent() {
                   {item}
                 </Button>
               ))}
+              <select
+                value={assignee}
+                onChange={(event) => setAssignee(event.target.value)}
+                aria-label="Filtrar por responsável"
+                className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
+              >
+                <option value="all">Todos os responsáveis</option>
+                <option value="mine">Meus leads</option>
+                <option value="unassigned">Não atribuídos</option>
+                {assignees.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
               <Button
                 onClick={() => syncLeads.mutate()}
                 disabled={syncLeads.isPending}
@@ -307,14 +355,24 @@ function CrmComponent() {
           ) : (
             <div className="grid min-w-[2360px] grid-cols-9 gap-3 pb-4">
               {pipelineColumns.map((column) => {
-                const stageLeads = filtered.filter((lead) => {
-                  if (lead.stage !== column.stage) return false;
-                  if (column.sourceGroup === "maps") {
-                    return lead.source === "Maps" || lead.source === "Maps + CNPJ";
-                  }
-                  if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
-                  return true;
-                });
+                const stageLeads = filtered
+                  .filter((lead) => {
+                    if (lead.stage !== column.stage) return false;
+                    if (column.sourceGroup === "maps") {
+                      return lead.source === "Maps" || lead.source === "Maps + CNPJ";
+                    }
+                    if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
+                    return true;
+                  })
+                  .sort((a, b) => {
+                    if (
+                      column.stage === "novo" &&
+                      Boolean(a.assigned_to) !== Boolean(b.assigned_to)
+                    ) {
+                      return a.assigned_to ? 1 : -1;
+                    }
+                    return Number(b.score) - Number(a.score);
+                  });
                 return (
                   <section
                     key={column.key}
@@ -352,6 +410,10 @@ function CrmComponent() {
         onSend={() => selected && sendLead.mutate(selected)}
         saving={updateLead.isPending}
         sending={sendLead.isPending}
+        assigning={assignLead.isPending}
+        currentUserId={user?.id ?? ""}
+        isAdmin={Boolean(access.profile?.is_admin)}
+        onAssign={(mode) => selected && assignLead.mutate({ id: selected.id, mode })}
         accessToken={session.access_token}
       />
     </div>
@@ -441,6 +503,12 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           {when(lead.next_action_at)}
         </p>
       )}
+      {lead.assigned_to_name && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-violet-300">
+          <UserCheck className="h-3.5 w-3.5" />
+          {lead.assigned_to_name}
+        </p>
+      )}
     </div>
   );
 }
@@ -452,6 +520,10 @@ function LeadDialog({
   onSend,
   saving,
   sending,
+  assigning,
+  currentUserId,
+  isAdmin,
+  onAssign,
   accessToken,
 }: {
   lead: Lead | null;
@@ -460,6 +532,10 @@ function LeadDialog({
   onSend: () => void;
   saving: boolean;
   sending: boolean;
+  assigning: boolean;
+  currentUserId: string;
+  isAdmin: boolean;
+  onAssign: (mode: "claim" | "release" | "takeover") => void;
   accessToken: string;
 }) {
   const [draft, setDraft] = useState<Partial<Lead>>({});
@@ -595,6 +671,59 @@ function LeadDialog({
                 )}
               </div>
               <div className="space-y-3">
+                <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+                  {lead.assigned_to_name && (
+                    <div className="mb-3 flex items-center gap-2 text-sm text-violet-200">
+                      <UserCheck className="h-4 w-4" />
+                      <span>{lead.assigned_to_name}</span>
+                    </div>
+                  )}
+                  {!lead.assigned_to ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => onAssign("claim")}
+                      disabled={assigning}
+                      className="w-full bg-violet-600 hover:bg-violet-500"
+                    >
+                      {assigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Assumir lead
+                    </Button>
+                  ) : lead.assigned_to === currentUserId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onAssign("release")}
+                      disabled={assigning}
+                      className="w-full border-zinc-700 bg-zinc-900"
+                    >
+                      Liberar lead
+                    </Button>
+                  ) : isAdmin ? (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => onAssign("takeover")}
+                        disabled={assigning}
+                        className="flex-1 bg-violet-600 hover:bg-violet-500"
+                      >
+                        Transferir para mim
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onAssign("release")}
+                        disabled={assigning}
+                        className="border-zinc-700 bg-zinc-900"
+                      >
+                        Liberar
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
                 <label className="block text-xs text-zinc-400">
                   Etapa
                   <select
