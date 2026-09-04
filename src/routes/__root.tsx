@@ -79,7 +79,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Painel M7 | Workflows e Financeiro" },
+      { title: "Painel M7" },
       {
         name: "description",
         content: "Central operacional da M7 para workflows e gestão financeira.",
