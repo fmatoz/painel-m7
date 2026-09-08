@@ -270,11 +270,11 @@ function CrmComponent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
-      toast.success("Lead enviado ao grupo pela Ester.");
+      toast.success("Lead enviado pela Ester para o seu destino cadastrado.");
     },
     onError: (error) =>
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível enviar o lead ao grupo.",
+        error instanceof Error ? error.message : "Não foi possível enviar o lead pelo WhatsApp.",
       ),
   });
 
@@ -880,7 +880,7 @@ function LeadDialog({
                 className="bg-emerald-600 hover:bg-emerald-500"
               >
                 <MessageCircle className="mr-2 h-4 w-4" />
-                {lead.group_sent_at ? "Enviar novamente ao grupo" : "Enviar ao grupo"}
+                {lead.group_sent_at ? "Enviar novamente" : "Enviar no WhatsApp"}
               </Button>
             </div>
             {activities.length > 0 && (
