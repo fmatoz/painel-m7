@@ -108,8 +108,18 @@ function UsuariosComponent() {
         .eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["app-users"] }),
-    onError: () => toast.error("Não foi possível atualizar as permissões."),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["app-users"] });
+      if ("whatsapp_destination" in variables.changes) {
+        toast.success("Destino dos envios atualizado.");
+      }
+    },
+    onError: (_, variables) =>
+      toast.error(
+        "whatsapp_destination" in variables.changes
+          ? "Não foi possível atualizar o destino dos envios."
+          : "Não foi possível atualizar as permissões.",
+      ),
   });
 
   if (authLoading || access.loading || !session || !access.can("usuarios")) {
