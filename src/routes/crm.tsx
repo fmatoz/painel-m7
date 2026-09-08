@@ -65,9 +65,17 @@ async function sendLeadToGroup(token: string, leadId: string): Promise<void> {
     headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body: JSON.stringify({ token, leadId }),
   });
-  if (!response.ok) throw new Error(`WhatsApp indisponível (${response.status})`);
-  const result = (await response.json()) as { ok?: boolean; error?: string };
-  if (!result.ok) throw new Error(result.error || "Não foi possível enviar o lead ao grupo.");
+  const rawResult = await response.text();
+  let result: { ok?: boolean; error?: string; message?: string } = {};
+  try {
+    result = JSON.parse(rawResult) as typeof result;
+  } catch {
+    // O n8n pode responder texto puro quando um node falha antes do Respond to Webhook.
+  }
+  if (!response.ok || !result.ok) {
+    const detail = result.error || result.message || rawResult.trim();
+    throw new Error(detail || `WhatsApp indisponível (${response.status})`);
+  }
 }
 
 const stages: { id: Stage; label: string; color: string }[] = [
@@ -136,9 +144,34 @@ function hasOwnWebsite(value: string | null) {
   );
 }
 
+function formatPhone(value: string | null) {
+  const digits = value?.replace(/\D/g, "") ?? "";
+  const national = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
+  if (national.length === 11) {
+    return `(${national.slice(0, 2)}) ${national.slice(2, 7)}-${national.slice(7)}`;
+  }
+  if (national.length === 10) {
+    return `(${national.slice(0, 2)}) ${national.slice(2, 6)}-${national.slice(6)}`;
+  }
+  return value?.replace(/@s\.whatsapp\.net$/i, "") || "Telefone não informado";
+}
+
+function cnpjCompanyName(lead: Lead) {
+  const refs = lead.source_refs as Record<string, unknown> | null;
+  const candidates = [
+    refs?.razao_social,
+    refs?.razaoSocial,
+    refs?.nome_empresarial,
+    refs?.legal_name,
+    lead.company_name,
+  ];
+  return candidates.find((value): value is string => typeof value === "string" && !!value.trim());
+}
+
 function googleMapsUrl(lead: Lead) {
   const location = lead.address || [lead.city, lead.state].filter(Boolean).join(" - ");
-  const query = [lead.company_name, location].filter(Boolean).join(", ");
+  const company = lead.source === "Maps" ? lead.company_name : cnpjCompanyName(lead);
+  const query = [company, location].filter(Boolean).join(", ");
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
@@ -239,7 +272,10 @@ function CrmComponent() {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       toast.success("Lead enviado ao grupo pela Ester.");
     },
-    onError: () => toast.error("Não foi possível enviar o lead ao grupo."),
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível enviar o lead ao grupo.",
+      ),
   });
 
   const filtered = useMemo(() => {
@@ -513,6 +549,10 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           <span className="truncate">{lead.partner_name || "Sócio não informado"}</span>
         </div>
       )}
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-zinc-300">
+        <Phone className="h-3.5 w-3.5 text-zinc-500" />
+        <span>{formatPhone(lead.phone)}</span>
+      </p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-zinc-500">
         <span className="truncate">{lead.source}</span>
         <span className="truncate text-right">{lead.city || "Cidade não informada"}</span>
@@ -625,7 +665,7 @@ function LeadDialog({
                 {lead.address && (
                   <Info icon={<Building2 />} label="Endereço" value={lead.address} />
                 )}
-                {(lead.website || lead.source === "Maps" || lead.source === "Maps + CNPJ") && (
+                {(lead.website || lead.source) && (
                   <div className="flex flex-wrap gap-2">
                     {lead.website && (
                       <a
@@ -640,7 +680,7 @@ function LeadDialog({
                         Abrir site
                       </a>
                     )}
-                    {(lead.source === "Maps" || lead.source === "Maps + CNPJ") && (
+                    {lead.source === "Maps" || lead.source === "Maps + CNPJ" ? (
                       <a
                         href={googleMapsUrl(lead)}
                         target="_blank"
@@ -649,6 +689,16 @@ function LeadDialog({
                       >
                         <ExternalLink className="h-4 w-4" />
                         Abrir no Maps
+                      </a>
+                    ) : (
+                      <a
+                        href={googleMapsUrl(lead)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                      >
+                        <Search className="h-4 w-4" />
+                        Verificar no Maps
                       </a>
                     )}
                   </div>
