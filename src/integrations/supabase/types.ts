@@ -21,6 +21,7 @@ export type Database = {
           is_admin: boolean;
           updated_at: string;
           user_id: string;
+          whatsapp_destination: string;
         };
         Insert: {
           active?: boolean;
@@ -34,6 +35,7 @@ export type Database = {
           is_admin?: boolean;
           updated_at?: string;
           user_id: string;
+          whatsapp_destination?: string;
         };
         Update: {
           active?: boolean;
@@ -47,6 +49,7 @@ export type Database = {
           is_admin?: boolean;
           updated_at?: string;
           user_id?: string;
+          whatsapp_destination?: string;
         };
         Relationships: [];
       };

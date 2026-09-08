@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, LogOut, Menu, Plus, ShieldCheck, UserRound } from "lucide-react";
+import { Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, UserRound } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ function UsuariosComponent() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [whatsappDestination, setWhatsappDestination] = useState("");
   const [permissions, setPermissions] = useState<Permissions>({
     can_inicio: true,
     can_workflows: false,
@@ -82,6 +83,7 @@ function UsuariosComponent() {
         user_id: authResult.user.id,
         email: cleanEmail,
         full_name: fullName.trim(),
+        whatsapp_destination: whatsappDestination.trim(),
         ...permissions,
       });
       if (error) throw error;
@@ -91,6 +93,7 @@ function UsuariosComponent() {
       setFullName("");
       setEmail("");
       setPassword("");
+      setWhatsappDestination("");
       queryClient.invalidateQueries({ queryKey: ["app-users"] });
     },
     onError: (error) =>
@@ -186,6 +189,18 @@ function UsuariosComponent() {
                     className="mt-1 border-zinc-700 bg-zinc-950"
                     placeholder="Mínimo de 6 caracteres"
                   />
+                </label>
+                <label className="block text-xs text-zinc-400">
+                  Destino dos envios
+                  <Input
+                    value={whatsappDestination}
+                    onChange={(e) => setWhatsappDestination(e.target.value)}
+                    className="mt-1 border-zinc-700 bg-zinc-950"
+                    placeholder="Número ou identificador do grupo"
+                  />
+                  <span className="mt-1 block text-[10px] text-zinc-600">
+                    Ex.: 5511999999999 ou 120363...@g.us
+                  </span>
                 </label>
                 <div>
                   <p className="mb-2 text-xs text-zinc-400">Permissões</p>
@@ -297,6 +312,26 @@ function UsuariosComponent() {
                             </label>
                           ))}
                         </div>
+                        <label className="mt-4 block text-xs text-zinc-400">
+                          <span className="flex items-center gap-2">
+                            <MessageCircle className="h-3.5 w-3.5 text-emerald-400" />
+                            Destino dos envios
+                          </span>
+                          <Input
+                            key={`${item.user_id}-${item.whatsapp_destination}`}
+                            defaultValue={item.whatsapp_destination}
+                            onBlur={(e) => {
+                              const destination = e.target.value.trim();
+                              if (destination === item.whatsapp_destination) return;
+                              updateUser.mutate({
+                                userId: item.user_id,
+                                changes: { whatsapp_destination: destination },
+                              });
+                            }}
+                            className="mt-1 border-zinc-800 bg-zinc-900"
+                            placeholder="Número ou identificador do grupo"
+                          />
+                        </label>
                       </div>
                     );
                   })
