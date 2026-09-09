@@ -42,6 +42,7 @@ import { useAppAccess } from "@/hooks/use-access";
 type Lead = Tables<"crm_leads">;
 type Activity = Tables<"crm_activities">;
 type Stage = Lead["stage"];
+type WebsiteFilter = "all" | "with" | "without";
 
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
 const CRM_WHATSAPP_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/whatsapp";
@@ -188,6 +189,7 @@ function CrmComponent() {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("Todos");
   const [assignee, setAssignee] = useState("all");
+  const [websiteFilter, setWebsiteFilter] = useState<WebsiteFilter>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -287,14 +289,19 @@ function CrmComponent() {
         (assignee === "mine" && lead.assigned_to === user?.id) ||
         (assignee === "unassigned" && !lead.assigned_to) ||
         lead.assigned_to === assignee;
+      const leadHasWebsite = hasOwnWebsite(lead.website);
+      const matchesWebsite =
+        websiteFilter === "all" ||
+        (websiteFilter === "with" && leadHasWebsite) ||
+        (websiteFilter === "without" && !leadHasWebsite);
       const matchesText =
         !needle ||
         [lead.company_name, lead.partner_name, lead.city, lead.phone, lead.cnpj].some((value) =>
           value?.toLowerCase().includes(needle),
         );
-      return matchesSource && matchesAssignee && matchesText;
+      return matchesSource && matchesAssignee && matchesWebsite && matchesText;
     });
-  }, [leadsQuery.data, search, source, assignee, user?.id]);
+  }, [leadsQuery.data, search, source, assignee, websiteFilter, user?.id]);
 
   const assignees = useMemo(() => {
     const people = new Map<string, string>();
@@ -384,6 +391,16 @@ function CrmComponent() {
                     {name}
                   </option>
                 ))}
+              </select>
+              <select
+                value={websiteFilter}
+                onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
+                aria-label="Filtrar por presença de site"
+                className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
+              >
+                <option value="all">Todos os sites</option>
+                <option value="with">Com site</option>
+                <option value="without">Sem site</option>
               </select>
               <Button
                 onClick={() => syncLeads.mutate()}
