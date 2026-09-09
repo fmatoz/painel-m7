@@ -402,7 +402,7 @@ function CrmComponent() {
                 <option value="unassigned">Não atribuídos</option>
                 {assignees.map(([id, name]) => (
                   <option key={id} value={id}>
-                    {name}
+                    {name} + não atribuídos
                   </option>
                 ))}
               </select>
