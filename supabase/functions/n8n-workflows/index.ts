@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function readJsonResponse(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -411,7 +421,7 @@ serve(async (req) => {
           });
         }
 
-        const data = await response.json();
+        const data = await readJsonResponse(response);
         return new Response(JSON.stringify(data), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -447,7 +457,7 @@ serve(async (req) => {
           });
         }
 
-        const data = await response.json();
+        const data = await readJsonResponse(response);
         return new Response(JSON.stringify(data), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -483,7 +493,7 @@ serve(async (req) => {
           });
         }
 
-        const data = await response.json();
+        const data = await readJsonResponse(response);
         return new Response(JSON.stringify(data), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -519,7 +529,43 @@ serve(async (req) => {
           });
         }
 
-        const data = await response.json();
+        const data = await readJsonResponse(response);
+        return new Response(JSON.stringify(data), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else if (action === "finance-delete") {
+        if (!M7_WEBHOOK_TOKEN) {
+          return new Response(JSON.stringify({ error: "M7_WEBHOOK_TOKEN not configured" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const response = await fetch(
+          `https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-financeiro-excluir/m7-financeiro/excluir`,
+          {
+            method: "POST",
+            headers: {
+              "x-m7-token": M7_WEBHOOK_TOKEN,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(lancamento),
+            signal: controller.signal,
+          },
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const status = response.status;
+          const message = await response.text();
+          return new Response(JSON.stringify({ error: "n8n error", message, status }), {
+            status: status >= 400 && status < 600 ? status : 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const data = await readJsonResponse(response);
         return new Response(JSON.stringify(data), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

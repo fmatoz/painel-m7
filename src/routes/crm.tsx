@@ -145,6 +145,15 @@ function hasOwnWebsite(value: string | null) {
   );
 }
 
+function hasAssignment(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  return !!normalized && !["null", "undefined", "none", "unassigned", "não atribuído", "nao atribuido"].includes(normalized);
+}
+
+function isUnassigned(lead: Lead) {
+  return !hasAssignment(lead.assigned_to) && !hasAssignment(lead.assigned_to_name);
+}
+
 function formatPhone(value: string | null) {
   const digits = value?.replace(/\D/g, "") ?? "";
   const national = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
@@ -284,11 +293,16 @@ function CrmComponent() {
     const needle = search.trim().toLowerCase();
     return (leadsQuery.data ?? []).filter((lead) => {
       const matchesSource = source === "Todos" || lead.source === source;
+      const isNamedAssignee = !["all", "mine", "unassigned"].includes(assignee);
+      const leadIsUnassigned = isUnassigned(lead);
       const matchesAssignee =
         assignee === "all" ||
         (assignee === "mine" && lead.assigned_to === user?.id) ||
-        (assignee === "unassigned" && !lead.assigned_to) ||
-        lead.assigned_to === assignee;
+        (assignee === "unassigned" && leadIsUnassigned) ||
+        (isNamedAssignee &&
+          (leadIsUnassigned ||
+            lead.assigned_to === assignee ||
+            lead.assigned_to_name === assignee));
       const leadHasWebsite = hasOwnWebsite(lead.website);
       const matchesWebsite =
         websiteFilter === "all" ||

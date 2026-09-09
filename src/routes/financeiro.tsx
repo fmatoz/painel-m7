@@ -17,6 +17,7 @@ import {
   Search,
   Filter,
   Home,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,6 +91,7 @@ function FinanceiroComponent() {
   const [isNewLancamentoOpen, setIsNewLancamentoOpen] = useState(false);
   const [isEditLancamentoOpen, setIsEditLancamentoOpen] = useState(false);
   const [isConfirmReceiveOpen, setIsConfirmReceiveOpen] = useState(false);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [selectedRecebimento, setSelectedRecebimento] = useState<
     FinanceData["recebimentos"][0] | null
   >(null);
@@ -271,6 +273,25 @@ function FinanceiroComponent() {
     },
     onError: (err: any) => {
       toast.error(`Erro ao atualizar lançamento: ${err.message || "Tente novamente"}`);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke("n8n-workflows", {
+        body: { action: "finance-delete", lancamento: { id } },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Lançamento excluído!");
+      setIsConfirmDeleteOpen(false);
+      setSelectedRecebimento(null);
+      queryClient.invalidateQueries({ queryKey: ["finance-dashboard"] });
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao excluir lançamento: ${err.message || "Tente novamente"}`);
     },
   });
 
@@ -633,6 +654,19 @@ function FinanceiroComponent() {
                           >
                             Editar
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
+                            onClick={() => {
+                              setSelectedRecebimento(r);
+                              setIsConfirmDeleteOpen(true);
+                            }}
+                            aria-label={`Excluir lançamento de ${r.cliente}`}
+                            title="Excluir lançamento"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                           {r.status === "Pendente" && r.valor_realizado < r.valor_previsto && (
                             <Button
                               size="sm"
@@ -731,12 +765,13 @@ function FinanceiroComponent() {
               </div>
             )}
             <div className="space-y-2">
-              <Label>Descrição</Label>
+              <Label>Descrição *</Label>
               <Input
                 value={newLancamento.descricao}
                 onChange={(e) => setNewLancamento({ ...newLancamento, descricao: e.target.value })}
                 placeholder="Ex: Projeto Landing Page"
                 className="bg-zinc-800 border-zinc-700"
+                required
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -796,6 +831,10 @@ function FinanceiroComponent() {
             <Button
               className="bg-blue-600 hover:bg-blue-700"
               onClick={() => {
+                if (!newLancamento.descricao.trim()) {
+                  toast.error("Informe uma descrição para o lançamento.");
+                  return;
+                }
                 const payload = {
                   ...newLancamento,
                   recorrente: newLancamento.modalidade === "Mensal",
@@ -1044,6 +1083,49 @@ function FinanceiroComponent() {
                 <CheckCircle2 className="w-4 h-4 mr-2" />
               )}
               Confirmar recebimento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Confirmação de Exclusão */}
+      <Dialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir lançamento?</DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              Esta ação não pode ser desfeita. O lançamento será removido da lista.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedRecebimento && (
+            <div className="py-4 text-sm space-y-2">
+              <div className="flex justify-between gap-4">
+                <span className="text-zinc-400">Cliente/fornecedor:</span>
+                <span className="font-medium text-right">{selectedRecebimento.cliente}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-zinc-400">Valor:</span>
+                <span className="font-bold">{formatCurrency(selectedRecebimento.valor_previsto)}</span>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="ghost" onClick={() => setIsConfirmDeleteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (selectedRecebimento) deleteMutation.mutate(selectedRecebimento.id);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Excluir lançamento
             </Button>
           </div>
         </DialogContent>
