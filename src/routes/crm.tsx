@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Columns3,
   ExternalLink,
+  Hammer,
   Home,
   LayoutDashboard,
   Loader2,
@@ -557,6 +558,11 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
             <AtSign className="h-4 w-4" />
           </span>
         )}
+        {lead.address_has_woodshop && (
+          <span title="Marcenaria confirmada neste endereço" className="mt-1 text-emerald-300">
+            <Hammer className="h-4 w-4" />
+          </span>
+        )}
         <span className="rounded-md bg-blue-500/15 px-2 py-1 text-xs font-bold text-blue-300">
           {Number(lead.score).toFixed(1)}
         </span>
@@ -695,6 +701,27 @@ function LeadDialog({
                 )}
                 {lead.address && (
                   <Info icon={<Building2 />} label="Endereço" value={lead.address} />
+                )}
+                {lead.source !== "Maps" && (
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm transition hover:border-emerald-500/60">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.address_has_woodshop)}
+                      onChange={(event) =>
+                        field("address_has_woodshop", event.target.checked)
+                      }
+                      className="mt-0.5 h-4 w-4 accent-emerald-500"
+                    />
+                    <Hammer className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                    <span>
+                      <span className="block font-medium text-zinc-200">
+                        Tem uma marcenaria neste endereço
+                      </span>
+                      <span className="mt-1 block text-xs text-zinc-500">
+                        Marque após confirmar pelo Google Maps ou outra fonte.
+                      </span>
+                    </span>
+                  </label>
                 )}
                 {(lead.website || lead.source) && (
                   <div className="flex flex-wrap gap-2">
@@ -898,6 +925,7 @@ function LeadDialog({
                     next_action: draft.next_action,
                     next_action_at: draft.next_action_at,
                     instagram_url: draft.instagram_url,
+                    address_has_woodshop: draft.address_has_woodshop,
                     notes: draft.notes,
                   })
                 }

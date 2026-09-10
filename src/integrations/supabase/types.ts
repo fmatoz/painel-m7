@@ -119,6 +119,7 @@ export type Database = {
       crm_leads: {
         Row: {
           address: string;
+          address_has_woodshop: boolean;
           assigned_at: string | null;
           assigned_to: string | null;
           assigned_to_email: string;
@@ -154,6 +155,7 @@ export type Database = {
         };
         Insert: {
           address?: string;
+          address_has_woodshop?: boolean;
           assigned_at?: string | null;
           assigned_to?: string | null;
           assigned_to_email?: string;
@@ -188,6 +190,7 @@ export type Database = {
         };
         Update: {
           address?: string;
+          address_has_woodshop?: boolean;
           assigned_at?: string | null;
           assigned_to?: string | null;
           assigned_to_email?: string;
