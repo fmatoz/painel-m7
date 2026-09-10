@@ -228,6 +228,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      crm_materials: {
+        Row: {
+          author_name: string;
+          created_at: string;
+          created_by: string;
+          id: string;
+          message: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          author_name?: string;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          message: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          author_name?: string;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          message?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       home_workspaces: {
         Row: {
           focus_text: string;
