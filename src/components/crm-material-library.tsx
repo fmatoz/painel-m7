@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clipboard, FileText, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Clipboard,
+  FileText,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +39,48 @@ type Props = {
   isAdmin: boolean;
 };
 
+const normalizeSearch = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const editDistance = (left: string, right: string) => {
+  const row = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = row[0];
+    row[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const previous = row[rightIndex];
+      row[rightIndex] = Math.min(
+        row[rightIndex] + 1,
+        row[rightIndex - 1] + 1,
+        diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+      diagonal = previous;
+    }
+  }
+  return row[right.length];
+};
+
+const fuzzyIncludes = (material: Material, rawQuery: string) => {
+  const query = normalizeSearch(rawQuery);
+  if (!query) return true;
+  const searchable = normalizeSearch(
+    [material.title, material.message, material.author_name].join(" "),
+  );
+  if (searchable.includes(query)) return true;
+  const words = searchable.split(" ").filter(Boolean);
+  return query.split(" ").every((term) =>
+    words.some((word) => {
+      if (word.includes(term) || term.includes(word)) return true;
+      if (term.length < 4 || Math.abs(word.length - term.length) > 2) return false;
+      return editDistance(word, term) <= (term.length >= 7 ? 2 : 1);
+    }),
+  );
+};
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
 
 async function materialsApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
@@ -47,6 +99,16 @@ async function materialsApi<T>(token: string, payload: Record<string, unknown>):
 export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Props) {
   const queryClient = useQueryClient();
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem("crm-material-favorites:" + currentUserId);
+      return stored ? (JSON.parse(stored) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Material | null>(null);
@@ -116,17 +178,32 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
     return [...unique.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
   }, [materialsQuery.data]);
 
-  const filtered = useMemo(
-    () =>
-      (materialsQuery.data ?? []).filter(
+  const filtered = useMemo(() => {
+    const favorites = new Set(favoriteIds);
+    return (materialsQuery.data ?? [])
+      .filter(
         (item) =>
-          authorFilter === "all" ||
-          (authorFilter === "mine" && item.created_by === currentUserId) ||
-          item.created_by === authorFilter,
-      ),
-    [materialsQuery.data, authorFilter, currentUserId],
-  );
+          (authorFilter === "all" ||
+            (authorFilter === "mine" && item.created_by === currentUserId) ||
+            item.created_by === authorFilter) &&
+          fuzzyIncludes(item, searchQuery),
+      )
+      .sort((left, right) => {
+        const favoriteDifference = Number(favorites.has(right.id)) - Number(favorites.has(left.id));
+        if (favoriteDifference !== 0) return favoriteDifference;
+        return right.updated_at.localeCompare(left.updated_at);
+      });
+  }, [materialsQuery.data, authorFilter, currentUserId, favoriteIds, searchQuery]);
 
+  const toggleFavorite = (id: string) => {
+    setFavoriteIds((current) => {
+      const next = current.includes(id)
+        ? current.filter((favoriteId) => favoriteId !== id)
+        : [...current, id];
+      localStorage.setItem("crm-material-favorites:" + currentUserId, JSON.stringify(next));
+      return next;
+    });
+  };
   const openNew = () => {
     setSelected(null);
     setTitle("");
@@ -159,7 +236,17 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
             Respostas e textos prontos para consultar durante o atendimento.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <div className="relative min-w-52 flex-1 sm:w-72 sm:flex-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Buscar nos materiais..."
+              aria-label="Buscar materiais por título ou conteúdo"
+              className="border-zinc-700 bg-zinc-900 pl-9 text-zinc-200"
+            />
+          </div>
           <select
             value={authorFilter}
             onChange={(event) => setAuthorFilter(event.target.value)}
@@ -197,21 +284,43 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {filtered.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => openMaterial(item)}
-              className="group relative aspect-square min-h-36 rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-500/70 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <span className="flex h-full items-center justify-center px-2 pb-5 text-center font-semibold leading-snug text-zinc-100">
-                {item.title}
-              </span>
-              <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate text-[11px] text-zinc-500 group-hover:text-zinc-400">
-                {item.author_name}
-              </span>
-            </button>
-          ))}
+          {filtered.map((item) => {
+            const isFavorite = favoriteIds.includes(item.id);
+            return (
+              <div
+                key={item.id}
+                className="group relative aspect-square min-h-36 rounded-xl border border-zinc-800 bg-zinc-900 transition hover:-translate-y-0.5 hover:border-blue-500/70 hover:bg-zinc-800"
+              >
+                <button
+                  type="button"
+                  onClick={() => openMaterial(item)}
+                  className="h-full w-full rounded-xl p-4 text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <span className="flex h-full items-center justify-center px-2 pb-5 text-center font-semibold leading-snug text-zinc-100">
+                    {item.title}
+                  </span>
+                  <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate text-[11px] text-zinc-500 group-hover:text-zinc-400">
+                    {item.author_name}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(item.id)}
+                  aria-label={
+                    isFavorite
+                      ? "Remover " + item.title + " dos favoritos"
+                      : "Favoritar " + item.title
+                  }
+                  aria-pressed={isFavorite}
+                  className="absolute right-2 top-2 rounded-full p-2 text-zinc-500 transition hover:bg-zinc-700 hover:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <Star
+                    className={"h-4 w-4 " + (isFavorite ? "fill-amber-400 text-amber-400" : "")}
+                  />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
