@@ -15,6 +15,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as InicioRouteImport } from './routes/inicio'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MateriaisRouteImport } from './routes/materiais'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -50,6 +51,11 @@ const InicioRoute = InicioRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MateriaisRoute = MateriaisRouteImport.update({
+  id: '/materiais',
+  path: '/materiais',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpRoute = McpRouteImport.update({
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/financeiro': typeof FinanceiroRoute
   '/inicio': typeof InicioRoute
   '/login': typeof LoginRoute
+  '/materiais': typeof MateriaisRoute
   '/mcp': typeof McpRoute
   '/usuarios': typeof UsuariosRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/financeiro': typeof FinanceiroRoute
   '/inicio': typeof InicioRoute
   '/login': typeof LoginRoute
+  '/materiais': typeof MateriaisRoute
   '/mcp': typeof McpRoute
   '/usuarios': typeof UsuariosRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/financeiro': typeof FinanceiroRoute
   '/inicio': typeof InicioRoute
   '/login': typeof LoginRoute
+  '/materiais': typeof MateriaisRoute
   '/mcp': typeof McpRoute
   '/usuarios': typeof UsuariosRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/inicio'
     | '/login'
+    | '/materiais'
     | '/mcp'
     | '/usuarios'
     | '/.mcp/list-tools'
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/inicio'
     | '/login'
+    | '/materiais'
     | '/mcp'
     | '/usuarios'
     | '/.mcp/list-tools'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/inicio'
     | '/login'
+    | '/materiais'
     | '/mcp'
     | '/usuarios'
     | '/.mcp/list-tools'
@@ -181,6 +193,7 @@ export interface RootRouteChildren {
   FinanceiroRoute: typeof FinanceiroRoute
   InicioRoute: typeof InicioRoute
   LoginRoute: typeof LoginRoute
+  MateriaisRoute: typeof MateriaisRoute
   McpRoute: typeof McpRoute
   UsuariosRoute: typeof UsuariosRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
@@ -231,6 +244,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/materiais': {
+      id: '/materiais'
+      path: '/materiais'
+      fullPath: '/materiais'
+      preLoaderRoute: typeof MateriaisRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp': {
@@ -285,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceiroRoute: FinanceiroRoute,
   InicioRoute: InicioRoute,
   LoginRoute: LoginRoute,
+  MateriaisRoute: MateriaisRoute,
   McpRoute: McpRoute,
   UsuariosRoute: UsuariosRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,

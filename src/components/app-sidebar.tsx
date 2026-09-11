@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   Columns3,
   Home,
   LayoutDashboard,
@@ -12,7 +13,7 @@ import type { AccessArea } from "@/hooks/use-access";
 import { useAppAccess } from "@/hooks/use-access";
 
 type Props = {
-  active: AccessArea;
+  active: AccessArea | "materiais";
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
   collapsed: boolean;
@@ -20,11 +21,36 @@ type Props = {
 };
 
 const items = [
-  { area: "inicio" as const, href: "/inicio", label: "Início", icon: Home },
-  { area: "workflows" as const, href: "/dashboard", label: "Workflows", icon: LayoutDashboard },
-  { area: "crm" as const, href: "/crm", label: "CRM", icon: Columns3 },
-  { area: "financeiro" as const, href: "/financeiro", label: "Financeiro", icon: TrendingUp },
-  { area: "usuarios" as const, href: "/usuarios", label: "Usuários", icon: Users },
+  { id: "inicio" as const, area: "inicio" as const, href: "/inicio", label: "Início", icon: Home },
+  {
+    id: "workflows" as const,
+    area: "workflows" as const,
+    href: "/dashboard",
+    label: "Workflows",
+    icon: LayoutDashboard,
+  },
+  { id: "crm" as const, area: "crm" as const, href: "/crm", label: "CRM", icon: Columns3 },
+  {
+    id: "materiais" as const,
+    area: "crm" as const,
+    href: "/materiais",
+    label: "Materiais",
+    icon: BookOpenText,
+  },
+  {
+    id: "financeiro" as const,
+    area: "financeiro" as const,
+    href: "/financeiro",
+    label: "Financeiro",
+    icon: TrendingUp,
+  },
+  {
+    id: "usuarios" as const,
+    area: "usuarios" as const,
+    href: "/usuarios",
+    label: "Usuários",
+    icon: Users,
+  },
 ];
 
 export function AppSidebar({
@@ -72,12 +98,12 @@ export function AppSidebar({
               const Icon = item.icon;
               return (
                 <a
-                  key={item.area}
+                  key={item.id}
                   href={item.href}
                   title={collapsed ? item.label : undefined}
                   className={`flex items-center rounded-lg py-3 transition-colors ${
                     collapsed ? "justify-center px-2" : "gap-3 px-4"
-                  } ${active === item.area ? "bg-blue-600 font-medium text-white" : "text-zinc-400 hover:bg-zinc-800 hover:text-white"}`}
+                  } ${active === item.id ? "bg-blue-600 font-medium text-white" : "text-zinc-400 hover:bg-zinc-800 hover:text-white"}`}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
                   {!collapsed && <span>{item.label}</span>}

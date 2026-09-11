@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AtSign,
-  BookOpenText,
   Building2,
   CalendarClock,
   Columns3,
@@ -40,13 +39,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
 import { useAppAccess } from "@/hooks/use-access";
-import { CrmMaterialLibrary } from "@/components/crm-material-library";
 
 type Lead = Tables<"crm_leads">;
 type Activity = Tables<"crm_activities">;
 type Stage = Lead["stage"];
 type WebsiteFilter = "all" | "with" | "without";
-type CrmSection = "pipeline" | "materials";
 
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
 const CRM_WHATSAPP_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/whatsapp";
@@ -204,7 +201,6 @@ function instagramUrl(value: string | null | undefined) {
 
 function CrmComponent() {
   const sidebar = useAppSidebar();
-  const [section, setSection] = useState<CrmSection>("pipeline");
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("Todos");
   const [assignee, setAssignee] = useState("all");
@@ -372,172 +368,133 @@ function CrmComponent() {
           </div>
         </header>
 
-        <nav className="flex shrink-0 gap-1 border-b border-zinc-800 bg-zinc-950 px-4 py-2 md:px-6">
-          <button
-            type="button"
-            onClick={() => setSection("pipeline")}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              section === "pipeline"
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Columns3 className="h-4 w-4" />
-            Pipeline
-          </button>
-          <button
-            type="button"
-            onClick={() => setSection("materials")}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              section === "materials"
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <BookOpenText className="h-4 w-4" />
-            Materiais
-          </button>
-        </nav>
-
         <div className="flex-1 overflow-auto p-4 lg:p-7">
-          {section === "materials" ? (
-            <CrmMaterialLibrary
-              accessToken={session.access_token}
-              currentUserId={user.id}
-              isAdmin={Boolean(access.profile?.is_admin)}
-            />
-          ) : (
-            <>
-              <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold">Pipeline comercial</h2>
-                  <p className="text-sm text-zinc-400">Arraste um card para atualizar sua etapa.</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <div className="relative min-w-64 flex-1">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
-                    <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Empresa, sócio, cidade, telefone..."
-                      className="border-zinc-700 bg-zinc-900 pl-9"
-                    />
-                  </div>
-                  {["Todos", "Maps", "CNPJ", "Maps + CNPJ"].map((item) => (
-                    <Button
-                      key={item}
-                      size="sm"
-                      variant={source === item ? "default" : "outline"}
-                      onClick={() => setSource(item)}
-                      className={
-                        source === item
-                          ? "bg-blue-600"
-                          : "border-zinc-700 bg-zinc-900 text-zinc-300"
-                      }
-                    >
-                      {item}
-                    </Button>
-                  ))}
-                  <select
-                    value={assignee}
-                    onChange={(event) => setAssignee(event.target.value)}
-                    aria-label="Filtrar por responsável"
-                    className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
-                  >
-                    <option value="all">Todos os responsáveis</option>
-                    <option value="mine">Meus leads</option>
-                    <option value="unassigned">Não atribuídos</option>
-                    {assignees.map(([id, name]) => (
-                      <option key={id} value={id}>
-                        {name} + não atribuídos
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={websiteFilter}
-                    onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
-                    aria-label="Filtrar por presença de site"
-                    className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
-                  >
-                    <option value="all">Todos os sites</option>
-                    <option value="with">Com site</option>
-                    <option value="without">Sem site</option>
-                  </select>
-                  <Button
-                    onClick={() => syncLeads.mutate()}
-                    disabled={syncLeads.isPending}
-                    className="bg-emerald-600 hover:bg-emerald-500"
-                  >
-                    <RefreshCw
-                      className={`mr-2 h-4 w-4 ${syncLeads.isPending ? "animate-spin" : ""}`}
-                    />
-                    Sincronizar leads
-                  </Button>
-                </div>
+          <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Pipeline comercial</h2>
+              <p className="text-sm text-zinc-400">Arraste um card para atualizar sua etapa.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="relative min-w-64 flex-1">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Empresa, sócio, cidade, telefone..."
+                  className="border-zinc-700 bg-zinc-900 pl-9"
+                />
               </div>
+              {["Todos", "Maps", "CNPJ", "Maps + CNPJ"].map((item) => (
+                <Button
+                  key={item}
+                  size="sm"
+                  variant={source === item ? "default" : "outline"}
+                  onClick={() => setSource(item)}
+                  className={
+                    source === item ? "bg-blue-600" : "border-zinc-700 bg-zinc-900 text-zinc-300"
+                  }
+                >
+                  {item}
+                </Button>
+              ))}
+              <select
+                value={assignee}
+                onChange={(event) => setAssignee(event.target.value)}
+                aria-label="Filtrar por responsável"
+                className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
+              >
+                <option value="all">Todos os responsáveis</option>
+                <option value="mine">Meus leads</option>
+                <option value="unassigned">Não atribuídos</option>
+                {assignees.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name} + não atribuídos
+                  </option>
+                ))}
+              </select>
+              <select
+                value={websiteFilter}
+                onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
+                aria-label="Filtrar por presença de site"
+                className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
+              >
+                <option value="all">Todos os sites</option>
+                <option value="with">Com site</option>
+                <option value="without">Sem site</option>
+              </select>
+              <Button
+                onClick={() => syncLeads.mutate()}
+                disabled={syncLeads.isPending}
+                className="bg-emerald-600 hover:bg-emerald-500"
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${syncLeads.isPending ? "animate-spin" : ""}`}
+                />
+                Sincronizar leads
+              </Button>
+            </div>
+          </div>
 
-              {leadsQuery.isLoading ? (
-                <div className="flex h-80 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                </div>
-              ) : leadsQuery.error ? (
-                <div className="rounded-xl border border-red-900 bg-red-950/30 p-8 text-center text-red-300">
-                  Não foi possível carregar o CRM. Confirme se a migração do banco foi publicada.
-                </div>
-              ) : (
-                <div className="grid min-w-[2360px] grid-cols-9 gap-3 pb-4">
-                  {pipelineColumns.map((column) => {
-                    const stageLeads = filtered
-                      .filter((lead) => {
-                        if (lead.stage !== column.stage) return false;
-                        if (column.sourceGroup === "maps") {
-                          return lead.source === "Maps" || lead.source === "Maps + CNPJ";
-                        }
-                        if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
-                        return true;
-                      })
-                      .sort((a, b) => {
-                        const assignmentDifference =
-                          Number(Boolean(b.assigned_to)) - Number(Boolean(a.assigned_to));
-                        if (assignmentDifference !== 0) return assignmentDifference;
+          {leadsQuery.isLoading ? (
+            <div className="flex h-80 items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            </div>
+          ) : leadsQuery.error ? (
+            <div className="rounded-xl border border-red-900 bg-red-950/30 p-8 text-center text-red-300">
+              Não foi possível carregar o CRM. Confirme se a migração do banco foi publicada.
+            </div>
+          ) : (
+            <div className="grid min-w-[2360px] grid-cols-9 gap-3 pb-4">
+              {pipelineColumns.map((column) => {
+                const stageLeads = filtered
+                  .filter((lead) => {
+                    if (lead.stage !== column.stage) return false;
+                    if (column.sourceGroup === "maps") {
+                      return lead.source === "Maps" || lead.source === "Maps + CNPJ";
+                    }
+                    if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
+                    return true;
+                  })
+                  .sort((a, b) => {
+                    const assignmentDifference =
+                      Number(Boolean(b.assigned_to)) - Number(Boolean(a.assigned_to));
+                    if (assignmentDifference !== 0) return assignmentDifference;
 
-                        const scoreDifference = Number(b.score) - Number(a.score);
-                        if (scoreDifference !== 0) return scoreDifference;
+                    const scoreDifference = Number(b.score) - Number(a.score);
+                    if (scoreDifference !== 0) return scoreDifference;
 
-                        const createdDifference =
-                          new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-                        if (createdDifference !== 0) return createdDifference;
+                    const createdDifference =
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                    if (createdDifference !== 0) return createdDifference;
 
-                        return a.id.localeCompare(b.id);
-                      });
-                    return (
-                      <section
-                        key={column.key}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          const id = e.dataTransfer.getData("text/lead-id");
-                          if (id) updateLead.mutate({ id, changes: { stage: column.stage } });
-                        }}
-                        className="min-h-[68vh] rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
-                      >
-                        <div className="mb-3 flex items-center gap-2">
-                          <span className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
-                          <h3 className="font-semibold">{column.label}</h3>
-                          <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                            {stageLeads.length}
-                          </span>
-                        </div>
-                        <div className="space-y-2">
-                          {stageLeads.map((lead) => (
-                            <LeadCard key={lead.id} lead={lead} onOpen={() => setSelected(lead)} />
-                          ))}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+                    return a.id.localeCompare(b.id);
+                  });
+                return (
+                  <section
+                    key={column.key}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      const id = e.dataTransfer.getData("text/lead-id");
+                      if (id) updateLead.mutate({ id, changes: { stage: column.stage } });
+                    }}
+                    className="min-h-[68vh] rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
+                  >
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
+                      <h3 className="font-semibold">{column.label}</h3>
+                      <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                        {stageLeads.length}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {stageLeads.map((lead) => (
+                        <LeadCard key={lead.id} lead={lead} onOpen={() => setSelected(lead)} />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
       </main>
