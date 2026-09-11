@@ -69,7 +69,7 @@ const fuzzyIncludes = (material: Material, rawQuery: string) => {
   const query = normalizeSearch(rawQuery);
   if (!query) return true;
   const searchable = normalizeSearch(
-    [material.title, material.message, material.author_name].join(" "),
+    [material.title, material.usage_context, material.message, material.author_name].join(" "),
   );
   if (searchable.includes(query)) return true;
   const words = searchable.split(" ").filter(Boolean);
@@ -113,6 +113,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Material | null>(null);
   const [title, setTitle] = useState("");
+  const [usageContext, setUsageContext] = useState("");
   const [message, setMessage] = useState("");
 
   const materialsQuery = useQuery({
@@ -125,6 +126,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const saveMaterial = useMutation({
     mutationFn: async () => {
       const cleanTitle = title.trim();
+      const cleanUsageContext = usageContext.trim();
       const cleanMessage = message.trim();
       if (!cleanTitle || !cleanMessage) throw new Error("Preencha o título e a mensagem.");
 
@@ -133,6 +135,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
           action: "material-update",
           materialId: selected.id,
           title: cleanTitle,
+          usageContext: cleanUsageContext,
           message: cleanMessage,
         });
       }
@@ -140,6 +143,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
       return materialsApi<Material>(accessToken, {
         action: "material-create",
         title: cleanTitle,
+        usageContext: cleanUsageContext,
         message: cleanMessage,
       });
     },
@@ -207,6 +211,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const openNew = () => {
     setSelected(null);
     setTitle("");
+    setUsageContext("");
     setMessage("");
     setEditing(true);
     setDialogOpen(true);
@@ -215,6 +220,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const openMaterial = (item: Material) => {
     setSelected(item);
     setTitle(item.title);
+    setUsageContext(item.usage_context || "");
     setMessage(item.message);
     setEditing(false);
     setDialogOpen(true);
@@ -371,7 +377,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
             <DialogDescription className="text-zinc-400">
               {selected
                 ? `Criado por ${selected.author_name}`
-                : "Adicione um título e o texto completo."}
+                : "Adicione um título, o uso e o texto completo."}
             </DialogDescription>
           </DialogHeader>
 
@@ -389,6 +395,19 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                   />
                 </label>
                 <label className="block space-y-2 text-sm">
+                  <span className="font-medium text-zinc-300">Uso</span>
+                  <Input
+                    value={usageContext}
+                    onChange={(event) => setUsageContext(event.target.value)}
+                    maxLength={500}
+                    placeholder="Ex.: Quando o cliente perguntar sobre preço"
+                    className="border-zinc-700 bg-zinc-950"
+                  />
+                  <span className="text-xs text-zinc-500">
+                    Informe, em uma frase curta, quando esta mensagem deve ser usada.
+                  </span>
+                </label>
+                <label className="block space-y-2 text-sm">
                   <span className="font-medium text-zinc-300">Mensagem</span>
                   <Textarea
                     value={message}
@@ -401,8 +420,18 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 </label>
               </>
             ) : (
-              <div className="whitespace-pre-wrap py-3 text-[15px] leading-7 text-zinc-200">
-                {message}
+              <div className="space-y-5 py-3">
+                {usageContext && (
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-400">
+                      Uso
+                    </p>
+                    <p className="text-sm leading-6 text-zinc-300">{usageContext}</p>
+                  </div>
+                )}
+                <div className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-200">
+                  {message}
+                </div>
               </div>
             )}
           </div>
@@ -423,6 +452,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
               onClick={() => {
                 if (selected && editing) {
                   setTitle(selected.title);
+                  setUsageContext(selected.usage_context || "");
                   setMessage(selected.message);
                   setEditing(false);
                 } else {

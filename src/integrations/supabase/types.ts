@@ -237,6 +237,7 @@ export type Database = {
           message: string;
           title: string;
           updated_at: string;
+          usage_context: string;
         };
         Insert: {
           author_name?: string;
@@ -246,6 +247,7 @@ export type Database = {
           message: string;
           title: string;
           updated_at?: string;
+          usage_context?: string;
         };
         Update: {
           author_name?: string;
@@ -255,6 +257,7 @@ export type Database = {
           message?: string;
           title?: string;
           updated_at?: string;
+          usage_context?: string;
         };
         Relationships: [];
       };
