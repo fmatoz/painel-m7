@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clipboard, FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Clipboard, FileText, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Material = Tables<"crm_materials">;
@@ -42,6 +48,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const queryClient = useQueryClient();
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Material | null>(null);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -124,6 +131,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
     setSelected(null);
     setTitle("");
     setMessage("");
+    setEditing(true);
     setDialogOpen(true);
   };
 
@@ -131,6 +139,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
     setSelected(item);
     setTitle(item.title);
     setMessage(item.message);
+    setEditing(false);
     setDialogOpen(true);
   };
 
@@ -208,14 +217,47 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-900 text-white sm:max-w-2xl">
+          {selected && canManageSelected && !editing && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Opções do material"
+                  className="absolute right-12 top-4 rounded-md p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="border-zinc-700 bg-zinc-900 text-zinc-100"
+              >
+                <DropdownMenuItem onSelect={() => setEditing(true)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-red-400 focus:bg-red-950 focus:text-red-300"
+                  onSelect={() => {
+                    if (window.confirm(`Excluir o material “${selected.title}”?`)) {
+                      deleteMaterial.mutate(selected.id);
+                    }
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {selected && canManageSelected ? (
-                <Pencil className="h-4 w-4" />
-              ) : (
-                <FileText className="h-4 w-4" />
-              )}
-              {selected ? selected.title : "Novo material"}
+              <FileText className="h-4 w-4 text-blue-400" />
+              {editing && selected
+                ? "Editar material"
+                : selected
+                  ? selected.title
+                  : "Novo material"}
             </DialogTitle>
             <DialogDescription className="text-zinc-400">
               {selected
@@ -225,7 +267,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {canManageSelected ? (
+            {editing ? (
               <>
                 <label className="block space-y-2 text-sm">
                   <span className="font-medium text-zinc-300">Título</span>
@@ -250,29 +292,14 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 </label>
               </>
             ) : (
-              <div className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-5 text-sm leading-relaxed text-zinc-200">
+              <div className="whitespace-pre-wrap py-3 text-[15px] leading-7 text-zinc-200">
                 {message}
               </div>
             )}
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {selected && canManageSelected && (
-              <Button
-                variant="outline"
-                className="mr-auto border-red-900 bg-red-950/30 text-red-300 hover:bg-red-950 hover:text-red-200"
-                disabled={deleteMaterial.isPending}
-                onClick={() => {
-                  if (window.confirm(`Excluir o material “${selected.title}”?`)) {
-                    deleteMaterial.mutate(selected.id);
-                  }
-                }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Excluir
-              </Button>
-            )}
-            {selected && (
+            {selected && !editing && (
               <Button
                 variant="outline"
                 onClick={copyMessage}
@@ -282,10 +309,22 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 Copiar mensagem
               </Button>
             )}
-            <Button variant="ghost" onClick={() => setDialogOpen(false)} className="text-zinc-300">
-              Fechar
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (selected && editing) {
+                  setTitle(selected.title);
+                  setMessage(selected.message);
+                  setEditing(false);
+                } else {
+                  setDialogOpen(false);
+                }
+              }}
+              className="text-zinc-300"
+            >
+              {selected && editing ? "Cancelar" : "Fechar"}
             </Button>
-            {canManageSelected && (
+            {editing && canManageSelected && (
               <Button
                 onClick={() => saveMaterial.mutate()}
                 disabled={saveMaterial.isPending || !title.trim() || !message.trim()}
