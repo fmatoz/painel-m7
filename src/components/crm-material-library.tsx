@@ -12,18 +12,33 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Material = Tables<"crm_materials">;
 type AuthorFilter = "all" | "mine" | string;
 
 type Props = {
+  accessToken: string;
   currentUserId: string;
   isAdmin: boolean;
 };
 
-export function CrmMaterialLibrary({ currentUserId, isAdmin }: Props) {
+const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
+
+async function materialsApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch(CRM_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+    cache: "no-store",
+    body: JSON.stringify({ token, ...payload }),
+  });
+  if (!response.ok) throw new Error(`CRM indisponível (${response.status})`);
+  const result = (await response.json()) as { ok?: boolean; data?: T; error?: string };
+  if (!result.ok) throw new Error(result.error || "Não foi possível concluir a operação.");
+  return result.data as T;
+}
+
+export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Props) {
   const queryClient = useQueryClient();
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -33,14 +48,7 @@ export function CrmMaterialLibrary({ currentUserId, isAdmin }: Props) {
 
   const materialsQuery = useQuery({
     queryKey: ["crm-materials"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_materials")
-        .select("*")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => materialsApi<Material[]>(accessToken, { action: "material-list" }),
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
@@ -52,23 +60,19 @@ export function CrmMaterialLibrary({ currentUserId, isAdmin }: Props) {
       if (!cleanTitle || !cleanMessage) throw new Error("Preencha o título e a mensagem.");
 
       if (selected) {
-        const { data, error } = await supabase
-          .from("crm_materials")
-          .update({ title: cleanTitle, message: cleanMessage })
-          .eq("id", selected.id)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
+        return materialsApi<Material>(accessToken, {
+          action: "material-update",
+          materialId: selected.id,
+          title: cleanTitle,
+          message: cleanMessage,
+        });
       }
 
-      const { data, error } = await supabase
-        .from("crm_materials")
-        .insert({ title: cleanTitle, message: cleanMessage })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return materialsApi<Material>(accessToken, {
+        action: "material-create",
+        title: cleanTitle,
+        message: cleanMessage,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crm-materials"] });
@@ -81,20 +85,22 @@ export function CrmMaterialLibrary({ currentUserId, isAdmin }: Props) {
 
   const deleteMaterial = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("crm_materials")
-        .delete()
-        .eq("id", id)
-        .select("id")
-        .single();
-      if (error) throw error;
+      await materialsApi<{ id: string }>(accessToken, {
+        action: "material-delete",
+        materialId: id,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crm-materials"] });
       setDialogOpen(false);
       toast.success("Material excluído.");
     },
-    onError: () => toast.error("Você não tem permissão para excluir este material."),
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Você não tem permissão para excluir este material.",
+      ),
   });
 
   const authors = useMemo(() => {
