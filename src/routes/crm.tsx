@@ -402,6 +402,7 @@ function CrmComponent() {
         <div className="flex-1 overflow-auto p-4 lg:p-7">
           {section === "materials" ? (
             <CrmMaterialLibrary
+              accessToken={session.access_token}
               currentUserId={user.id}
               isAdmin={Boolean(access.profile?.is_admin)}
             />
