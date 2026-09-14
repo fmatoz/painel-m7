@@ -231,6 +231,7 @@ export type Database = {
       crm_materials: {
         Row: {
           author_name: string;
+          content_format: string;
           created_at: string;
           created_by: string;
           id: string;
@@ -241,6 +242,7 @@ export type Database = {
         };
         Insert: {
           author_name?: string;
+          content_format?: string;
           created_at?: string;
           created_by?: string;
           id?: string;
@@ -251,6 +253,7 @@ export type Database = {
         };
         Update: {
           author_name?: string;
+          content_format?: string;
           created_at?: string;
           created_by?: string;
           id?: string;

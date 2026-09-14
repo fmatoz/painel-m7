@@ -32,12 +32,29 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Material = Tables<"crm_materials">;
 type AuthorFilter = "all" | "mine" | string;
+type MaterialFormat = "text" | "audio" | "both";
+type FormatFilter = "all" | MaterialFormat;
 
 type Props = {
   accessToken: string;
   currentUserId: string;
   isAdmin: boolean;
 };
+
+const FORMAT_LABELS: Record<MaterialFormat, string> = {
+  text: "Texto",
+  audio: "Áudio",
+  both: "Áudio e texto",
+};
+
+const FORMAT_BADGE_STYLES: Record<MaterialFormat, string> = {
+  text: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  audio: "border-violet-500/30 bg-violet-500/10 text-violet-300",
+  both: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+};
+
+const normalizeMaterialFormat = (value: string | null | undefined): MaterialFormat =>
+  value === "audio" || value === "both" ? value : "text";
 
 const normalizeSearch = (value: string) =>
   value
@@ -99,6 +116,7 @@ async function materialsApi<T>(token: string, payload: Record<string, unknown>):
 export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Props) {
   const queryClient = useQueryClient();
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -114,6 +132,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const [selected, setSelected] = useState<Material | null>(null);
   const [title, setTitle] = useState("");
   const [usageContext, setUsageContext] = useState("");
+  const [contentFormat, setContentFormat] = useState<MaterialFormat>("text");
   const [message, setMessage] = useState("");
 
   const materialsQuery = useQuery({
@@ -136,6 +155,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
           materialId: selected.id,
           title: cleanTitle,
           usageContext: cleanUsageContext,
+          contentFormat,
           message: cleanMessage,
         });
       }
@@ -144,6 +164,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
         action: "material-create",
         title: cleanTitle,
         usageContext: cleanUsageContext,
+        contentFormat,
         message: cleanMessage,
       });
     },
@@ -190,6 +211,8 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
           (authorFilter === "all" ||
             (authorFilter === "mine" && item.created_by === currentUserId) ||
             item.created_by === authorFilter) &&
+          (formatFilter === "all" ||
+            normalizeMaterialFormat(item.content_format) === formatFilter) &&
           fuzzyIncludes(item, searchQuery),
       )
       .sort((left, right) => {
@@ -197,7 +220,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
         if (favoriteDifference !== 0) return favoriteDifference;
         return right.updated_at.localeCompare(left.updated_at);
       });
-  }, [materialsQuery.data, authorFilter, currentUserId, favoriteIds, searchQuery]);
+  }, [materialsQuery.data, authorFilter, formatFilter, currentUserId, favoriteIds, searchQuery]);
 
   const toggleFavorite = (id: string) => {
     setFavoriteIds((current) => {
@@ -212,6 +235,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
     setSelected(null);
     setTitle("");
     setUsageContext("");
+    setContentFormat("text");
     setMessage("");
     setEditing(true);
     setDialogOpen(true);
@@ -221,6 +245,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
     setSelected(item);
     setTitle(item.title);
     setUsageContext(item.usage_context || "");
+    setContentFormat(normalizeMaterialFormat(item.content_format));
     setMessage(item.message);
     setEditing(false);
     setDialogOpen(true);
@@ -267,6 +292,17 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
               </option>
             ))}
           </select>
+          <select
+            value={formatFilter}
+            onChange={(event) => setFormatFilter(event.target.value as FormatFilter)}
+            aria-label="Filtrar materiais por formato"
+            className="h-10 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-300"
+          >
+            <option value="all">Todos os formatos</option>
+            <option value="text">Texto</option>
+            <option value="audio">Áudio</option>
+            <option value="both">Áudio e texto</option>
+          </select>
           <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-500">
             <Plus className="mr-2 h-4 w-4" />
             Novo material
@@ -286,7 +322,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
         <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-900/30 text-center">
           <FileText className="mb-3 h-9 w-9 text-zinc-600" />
           <p className="font-medium text-zinc-300">Nenhum material neste filtro</p>
-          <p className="mt-1 text-sm text-zinc-500">Crie o primeiro texto para a equipe.</p>
+          <p className="mt-1 text-sm text-zinc-500">Crie o primeiro material para a equipe.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
@@ -297,6 +333,14 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 key={item.id}
                 className="group relative aspect-square min-h-36 rounded-xl border border-zinc-800 bg-zinc-900 transition hover:-translate-y-0.5 hover:border-blue-500/70 hover:bg-zinc-800"
               >
+                <span
+                  className={
+                    "pointer-events-none absolute left-2 top-2 rounded-md border px-2 py-1 text-[11px] font-medium " +
+                    FORMAT_BADGE_STYLES[normalizeMaterialFormat(item.content_format)]
+                  }
+                >
+                  {FORMAT_LABELS[normalizeMaterialFormat(item.content_format)]}
+                </span>
                 <button
                   type="button"
                   onClick={() => openMaterial(item)}
@@ -377,7 +421,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
             <DialogDescription className="text-zinc-400">
               {selected
                 ? `Criado por ${selected.author_name}`
-                : "Adicione um título, o uso e o texto completo."}
+                : "Adicione um título, o uso, o formato e o texto completo."}
             </DialogDescription>
           </DialogHeader>
 
@@ -408,6 +452,18 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                   </span>
                 </label>
                 <label className="block space-y-2 text-sm">
+                  <span className="font-medium text-zinc-300">Formato</span>
+                  <select
+                    value={contentFormat}
+                    onChange={(event) => setContentFormat(event.target.value as MaterialFormat)}
+                    className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"
+                  >
+                    <option value="text">Texto</option>
+                    <option value="audio">Áudio</option>
+                    <option value="both">Áudio e texto</option>
+                  </select>
+                </label>
+                <label className="block space-y-2 text-sm">
                   <span className="font-medium text-zinc-300">Mensagem</span>
                   <Textarea
                     value={message}
@@ -421,6 +477,14 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
               </>
             ) : (
               <div className="space-y-5 py-3">
+                <span
+                  className={
+                    "inline-flex rounded-md border px-2.5 py-1 text-xs font-medium " +
+                    FORMAT_BADGE_STYLES[contentFormat]
+                  }
+                >
+                  {FORMAT_LABELS[contentFormat]}
+                </span>
                 {usageContext && (
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3">
                     <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-400">
@@ -453,6 +517,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 if (selected && editing) {
                   setTitle(selected.title);
                   setUsageContext(selected.usage_context || "");
+                  setContentFormat(normalizeMaterialFormat(selected.content_format));
                   setMessage(selected.message);
                   setEditing(false);
                 } else {
