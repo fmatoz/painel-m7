@@ -178,12 +178,16 @@ function radarM7(lead: Partial<Lead>) {
   if (!site || !instagram || !traffic) return null;
   if (!(site in radarPoints.site) || !(instagram in radarPoints.instagram)) return null;
   if (!(traffic in radarPoints.traffic)) return null;
+  const manual =
+    20 +
+    radarPoints.site[site] +
+    radarPoints.instagram[instagram] +
+    radarPoints.traffic[traffic];
+  const legacyScore = Math.min(10, Math.max(0, Number(lead.score) || 0));
   return {
-    total:
-      20 +
-      radarPoints.site[site] +
-      radarPoints.instagram[instagram] +
-      radarPoints.traffic[traffic],
+    total: Math.round(manual * 0.8 + legacyScore * 2),
+    manual,
+    legacyScore,
     site: radarPoints.site[site],
     instagram: radarPoints.instagram[instagram],
     traffic: radarPoints.traffic[traffic],
@@ -769,6 +773,7 @@ function LeadDialog({
   }, [lead, accessToken]);
   const field = (key: keyof Lead, value: unknown) =>
     setDraft((current) => ({ ...current, [key]: value }));
+  const radar = radarM7(draft);
   return (
     <Dialog open={!!lead} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-zinc-700 bg-zinc-900 text-white sm:max-w-3xl">
@@ -780,12 +785,12 @@ function LeadDialog({
                 <span className="rounded-lg bg-blue-500/15 px-2.5 py-1 text-sm text-blue-300">
                   Nota {Number(lead.score).toFixed(1)}
                 </span>
-                {radarM7(draft) && (
+                {radar && (
                   <span
                     title="Possibilidades de solução; não representa prioridade nem chance de fechamento."
                     className="inline-flex items-center gap-1 rounded-lg border border-orange-500/30 bg-orange-500/15 px-2.5 py-1 text-sm text-orange-300"
                   >
-                    <Flame className="h-4 w-4" /> Radar M7 {radarM7(draft)!.total}
+                    <Flame className="h-4 w-4" /> Radar M7 {radar.total}
                   </span>
                 )}
               </DialogTitle>
@@ -932,14 +937,14 @@ function LeadDialog({
                       { value: "yes", label: "Faz" },
                     ]}
                   />
-                  {radarM7(draft) ? (
+                  {radar ? (
                     <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 p-3 text-xs text-orange-100">
                       <div className="flex items-center justify-between gap-3">
                         <span className="inline-flex items-center gap-1.5 font-semibold">
                           <Flame className="h-4 w-4 text-orange-400" /> Radar M7
                         </span>
                         <span className="text-base font-bold text-orange-300">
-                          {radarM7(draft)!.total}/100
+                          {radar.total}/100
                         </span>
                       </div>
                       <p className="mt-1.5 text-orange-200/75">
@@ -947,8 +952,11 @@ function LeadDialog({
                         prioridade nem chance de fechamento.
                       </p>
                       <p className="mt-2 text-[11px] text-orange-200/60">
-                        Base 20 · Site +{radarM7(draft)!.site} · Instagram +
-                        {radarM7(draft)!.instagram} · Tráfego +{radarM7(draft)!.traffic}
+                        Manual {radar.manual}: Base 20 · Site +{radar.site} · Instagram +
+                        {radar.instagram} · Tráfego +{radar.traffic}
+                      </p>
+                      <p className="mt-1 text-[11px] font-medium text-orange-200/80">
+                        Cálculo: {radar.manual} × 80% + Nota {radar.legacyScore.toFixed(1)} × 2
                       </p>
                     </div>
                   ) : (
