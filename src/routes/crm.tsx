@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Columns3,
   ExternalLink,
+  Flame,
   MapPinCheck,
   Home,
   LayoutDashboard,
@@ -146,6 +147,49 @@ const paidTrafficBadge = {
   },
 } as const;
 
+const instagramQualityBadge = {
+  none: { label: "Sem Instagram", className: "border-zinc-600 bg-zinc-800 text-zinc-300" },
+  bad: {
+    label: "Instagram ruim",
+    className: "border-rose-500/40 bg-rose-500/10 text-rose-300",
+  },
+  good: {
+    label: "Instagram bom",
+    className: "border-pink-500/40 bg-pink-500/10 text-pink-300",
+  },
+} as const;
+
+const radarPoints = {
+  site: { none: 35, bad: 22, good: 7 },
+  instagram: { none: 20, bad: 12, good: 5 },
+  traffic: { no: 25, yes: 12 },
+} as const;
+
+function radarM7(lead: Partial<Lead>) {
+  const site = lead.site_quality as keyof typeof radarPoints.site | null | undefined;
+  const instagram = lead.instagram_quality as
+    | keyof typeof radarPoints.instagram
+    | null
+    | undefined;
+  const traffic = lead.paid_traffic_status as
+    | keyof typeof radarPoints.traffic
+    | null
+    | undefined;
+  if (!site || !instagram || !traffic) return null;
+  if (!(site in radarPoints.site) || !(instagram in radarPoints.instagram)) return null;
+  if (!(traffic in radarPoints.traffic)) return null;
+  return {
+    total:
+      20 +
+      radarPoints.site[site] +
+      radarPoints.instagram[instagram] +
+      radarPoints.traffic[traffic],
+    site: radarPoints.site[site],
+    instagram: radarPoints.instagram[instagram],
+    traffic: radarPoints.traffic[traffic],
+  };
+}
+
 export const Route = createFileRoute("/crm")({ component: CrmComponent });
 
 function money(value: number | null) {
@@ -259,6 +303,7 @@ function CrmComponent() {
         freshLead.assigned_to_name !== selected.assigned_to_name ||
         freshLead.stage !== selected.stage ||
         freshLead.site_quality !== selected.site_quality ||
+        freshLead.instagram_quality !== selected.instagram_quality ||
         freshLead.paid_traffic_status !== selected.paid_traffic_status)
     ) {
       setSelected(freshLead);
@@ -572,6 +617,11 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
     lead.paid_traffic_status && lead.paid_traffic_status in paidTrafficBadge
       ? paidTrafficBadge[lead.paid_traffic_status as keyof typeof paidTrafficBadge]
       : null;
+  const confirmedInstagram =
+    lead.instagram_quality && lead.instagram_quality in instagramQualityBadge
+      ? instagramQualityBadge[lead.instagram_quality as keyof typeof instagramQualityBadge]
+      : null;
+  const radar = radarM7(lead);
   return (
     <div
       role="button"
@@ -597,6 +647,15 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
         {lead.address_verified && (
           <span title="Endereço verificado" className="mt-1 text-emerald-300">
             <MapPinCheck className="h-4 w-4" />
+          </span>
+        )}
+        {radar && (
+          <span
+            title="Radar M7: possibilidades de solução, não prioridade nem chance de fechamento"
+            className="inline-flex items-center gap-1 rounded-md border border-orange-500/30 bg-orange-500/15 px-2 py-1 text-xs font-bold text-orange-300"
+          >
+            <Flame className="h-3.5 w-3.5" />
+            {radar.total}
           </span>
         )}
         <span className="rounded-md bg-blue-500/15 px-2 py-1 text-xs font-bold text-blue-300">
@@ -633,13 +692,20 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
       {!mapsOnly && (
         <p className="mt-2 text-xs font-medium text-zinc-300">{money(lead.capital_social)}</p>
       )}
-      {(confirmedSite || confirmedTraffic) && (
+      {(confirmedSite || confirmedInstagram || confirmedTraffic) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {confirmedSite && (
             <span
               className={`rounded-md border px-2 py-1 text-[10px] font-medium ${confirmedSite.className}`}
             >
               {confirmedSite.label}
+            </span>
+          )}
+          {confirmedInstagram && (
+            <span
+              className={`rounded-md border px-2 py-1 text-[10px] font-medium ${confirmedInstagram.className}`}
+            >
+              {confirmedInstagram.label}
             </span>
           )}
           {confirmedTraffic && (
@@ -714,6 +780,14 @@ function LeadDialog({
                 <span className="rounded-lg bg-blue-500/15 px-2.5 py-1 text-sm text-blue-300">
                   Nota {Number(lead.score).toFixed(1)}
                 </span>
+                {radarM7(draft) && (
+                  <span
+                    title="Possibilidades de solução; não representa prioridade nem chance de fechamento."
+                    className="inline-flex items-center gap-1 rounded-lg border border-orange-500/30 bg-orange-500/15 px-2.5 py-1 text-sm text-orange-300"
+                  >
+                    <Flame className="h-4 w-4" /> Radar M7 {radarM7(draft)!.total}
+                  </span>
+                )}
               </DialogTitle>
               <DialogDescription className="text-zinc-400">
                 {lead.source} · {lead.city || "Cidade não informada"}
@@ -838,6 +912,17 @@ function LeadDialog({
                     ]}
                   />
                   <QualificationChoice
+                    label="Instagram"
+                    value={draft.instagram_quality}
+                    onChange={(value) => field("instagram_quality", value)}
+                    options={[
+                      { value: null, label: "Não analisado" },
+                      { value: "none", label: "Não tem" },
+                      { value: "bad", label: "Ruim" },
+                      { value: "good", label: "Bom" },
+                    ]}
+                  />
+                  <QualificationChoice
                     label="Tráfego pago"
                     value={draft.paid_traffic_status}
                     onChange={(value) => field("paid_traffic_status", value)}
@@ -847,6 +932,30 @@ function LeadDialog({
                       { value: "yes", label: "Faz" },
                     ]}
                   />
+                  {radarM7(draft) ? (
+                    <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 p-3 text-xs text-orange-100">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="inline-flex items-center gap-1.5 font-semibold">
+                          <Flame className="h-4 w-4 text-orange-400" /> Radar M7
+                        </span>
+                        <span className="text-base font-bold text-orange-300">
+                          {radarM7(draft)!.total}/100
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-orange-200/75">
+                        Indica quantas possibilidades de solução podem ser exploradas. Não é
+                        prioridade nem chance de fechamento.
+                      </p>
+                      <p className="mt-2 text-[11px] text-orange-200/60">
+                        Base 20 · Site +{radarM7(draft)!.site} · Instagram +
+                        {radarM7(draft)!.instagram} · Tráfego +{radarM7(draft)!.traffic}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500">
+                      Avalie os três itens para ativar o Radar M7.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor={`instagram-${lead.id}`} className="text-xs text-zinc-400">
@@ -1008,6 +1117,7 @@ function LeadDialog({
                     instagram_url: draft.instagram_url,
                     address_verified: draft.address_verified,
                     site_quality: draft.site_quality,
+                    instagram_quality: draft.instagram_quality,
                     paid_traffic_status: draft.paid_traffic_status,
                     notes: draft.notes,
                   })

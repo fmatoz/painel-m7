@@ -137,6 +137,7 @@ export type Database = {
           group_sent_at: string | null;
           id: string;
           instagram_url: string;
+          instagram_quality: string | null;
           maps_rating: number | null;
           maps_reviews: number | null;
           next_action: string;
@@ -176,6 +177,7 @@ export type Database = {
           group_sent_at?: string | null;
           id?: string;
           instagram_url?: string;
+          instagram_quality?: string | null;
           maps_rating?: number | null;
           maps_reviews?: number | null;
           next_action?: string;
@@ -214,6 +216,7 @@ export type Database = {
           group_sent_at?: string | null;
           id?: string;
           instagram_url?: string;
+          instagram_quality?: string | null;
           maps_rating?: number | null;
           maps_reviews?: number | null;
           next_action?: string;
