@@ -126,6 +126,26 @@ const sourceStyle: Record<string, string> = {
   "Maps + CNPJ": "border-l-violet-500",
 };
 
+const siteQualityBadge = {
+  none: { label: "Sem site", className: "border-zinc-600 bg-zinc-800 text-zinc-300" },
+  bad: { label: "Site ruim", className: "border-rose-500/40 bg-rose-500/10 text-rose-300" },
+  good: {
+    label: "Site bom",
+    className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  },
+} as const;
+
+const paidTrafficBadge = {
+  yes: {
+    label: "Faz tráfego pago",
+    className: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+  },
+  no: {
+    label: "Sem tráfego pago",
+    className: "border-zinc-600 bg-zinc-800 text-zinc-300",
+  },
+} as const;
+
 export const Route = createFileRoute("/crm")({ component: CrmComponent });
 
 function money(value: number | null) {
@@ -237,7 +257,9 @@ function CrmComponent() {
       freshLead &&
       (freshLead.assigned_to !== selected.assigned_to ||
         freshLead.assigned_to_name !== selected.assigned_to_name ||
-        freshLead.stage !== selected.stage)
+        freshLead.stage !== selected.stage ||
+        freshLead.site_quality !== selected.site_quality ||
+        freshLead.paid_traffic_status !== selected.paid_traffic_status)
     ) {
       setSelected(freshLead);
     }
@@ -542,6 +564,14 @@ function Nav({
 function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
   const mapsOnly = lead.source === "Maps";
   const ownWebsite = hasOwnWebsite(lead.website);
+  const confirmedSite =
+    lead.site_quality && lead.site_quality in siteQualityBadge
+      ? siteQualityBadge[lead.site_quality as keyof typeof siteQualityBadge]
+      : null;
+  const confirmedTraffic =
+    lead.paid_traffic_status && lead.paid_traffic_status in paidTrafficBadge
+      ? paidTrafficBadge[lead.paid_traffic_status as keyof typeof paidTrafficBadge]
+      : null;
   return (
     <div
       role="button"
@@ -602,6 +632,24 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
       </div>
       {!mapsOnly && (
         <p className="mt-2 text-xs font-medium text-zinc-300">{money(lead.capital_social)}</p>
+      )}
+      {(confirmedSite || confirmedTraffic) && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {confirmedSite && (
+            <span
+              className={`rounded-md border px-2 py-1 text-[10px] font-medium ${confirmedSite.className}`}
+            >
+              {confirmedSite.label}
+            </span>
+          )}
+          {confirmedTraffic && (
+            <span
+              className={`rounded-md border px-2 py-1 text-[10px] font-medium ${confirmedTraffic.className}`}
+            >
+              {confirmedTraffic.label}
+            </span>
+          )}
+        </div>
       )}
       {lead.next_action_at && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300">
@@ -771,6 +819,35 @@ function LeadDialog({
                     avaliações
                   </p>
                 )}
+                <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">Qualificação rápida</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Somente respostas confirmadas aparecem no card fechado.
+                    </p>
+                  </div>
+                  <QualificationChoice
+                    label="Site"
+                    value={draft.site_quality}
+                    onChange={(value) => field("site_quality", value)}
+                    options={[
+                      { value: null, label: "Não analisado" },
+                      { value: "none", label: "Não tem" },
+                      { value: "bad", label: "Ruim" },
+                      { value: "good", label: "Bom" },
+                    ]}
+                  />
+                  <QualificationChoice
+                    label="Tráfego pago"
+                    value={draft.paid_traffic_status}
+                    onChange={(value) => field("paid_traffic_status", value)}
+                    options={[
+                      { value: null, label: "Não analisado" },
+                      { value: "no", label: "Não faz" },
+                      { value: "yes", label: "Faz" },
+                    ]}
+                  />
+                </div>
                 <div className="space-y-1.5">
                   <label htmlFor={`instagram-${lead.id}`} className="text-xs text-zinc-400">
                     Instagram
@@ -930,6 +1007,8 @@ function LeadDialog({
                     next_action_at: draft.next_action_at,
                     instagram_url: draft.instagram_url,
                     address_verified: draft.address_verified,
+                    site_quality: draft.site_quality,
+                    paid_traffic_status: draft.paid_traffic_status,
                     notes: draft.notes,
                   })
                 }
@@ -966,6 +1045,44 @@ function LeadDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function QualificationChoice({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null | undefined;
+  options: { value: string | null; label: string }[];
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-zinc-400">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const active = (value ?? null) === option.value;
+          return (
+            <button
+              key={option.value ?? "unconfirmed"}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(option.value)}
+              className={`rounded-md border px-2.5 py-1.5 text-xs transition ${
+                active
+                  ? "border-blue-500 bg-blue-500/15 text-blue-200"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

@@ -143,6 +143,7 @@ export type Database = {
           next_action_at: string | null;
           notes: string;
           partner_name: string;
+          paid_traffic_status: string | null;
           phone: string;
           phone_normalized: string | null;
           score: number;
@@ -151,6 +152,7 @@ export type Database = {
           source_refs: Json;
           stage: string;
           state: string;
+          site_quality: string | null;
           updated_at: string;
           website: string;
         };
@@ -180,6 +182,7 @@ export type Database = {
           next_action_at?: string | null;
           notes?: string;
           partner_name?: string;
+          paid_traffic_status?: string | null;
           phone?: string;
           score?: number;
           service_interest?: string;
@@ -187,6 +190,7 @@ export type Database = {
           source_refs?: Json;
           stage?: string;
           state?: string;
+          site_quality?: string | null;
           updated_at?: string;
           website?: string;
         };
@@ -216,6 +220,7 @@ export type Database = {
           next_action_at?: string | null;
           notes?: string;
           partner_name?: string;
+          paid_traffic_status?: string | null;
           phone?: string;
           score?: number;
           service_interest?: string;
@@ -223,6 +228,7 @@ export type Database = {
           source_refs?: Json;
           stage?: string;
           state?: string;
+          site_quality?: string | null;
           updated_at?: string;
           website?: string;
         };
