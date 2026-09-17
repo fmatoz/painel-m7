@@ -339,7 +339,7 @@ function metaAdsLibraryUrl(value: string | null | undefined, companyName: string
 }
 
 function instagramSearchUrl(lead: Lead) {
-  const query = [`"${lead.company_name}"`, lead.city, "Instagram"].filter(Boolean).join(" ");
+  const query = `"${lead.company_name}" Instagram`;
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
@@ -369,7 +369,7 @@ function facebookPageQuery(value: string | null | undefined, companyName: string
 }
 
 function facebookSearchUrl(lead: Lead) {
-  const query = [`"${lead.company_name}"`, lead.city, "Facebook"].filter(Boolean).join(" ");
+  const query = `"${lead.company_name}" Facebook`;
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
