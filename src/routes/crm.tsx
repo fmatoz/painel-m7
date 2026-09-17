@@ -598,9 +598,10 @@ function CrmComponent() {
                     return true;
                   })
                   .sort((a, b) => {
-                    const assignmentDifference =
-                      Number(Boolean(b.assigned_to)) - Number(Boolean(a.assigned_to));
-                    if (assignmentDifference !== 0) return assignmentDifference;
+                    const touchedDifference =
+                      new Date(b.last_touched_at ?? b.created_at).getTime() -
+                      new Date(a.last_touched_at ?? a.created_at).getTime();
+                    if (touchedDifference !== 0) return touchedDifference;
 
                     const scoreDifference = Number(b.score) - Number(a.score);
                     if (scoreDifference !== 0) return scoreDifference;
