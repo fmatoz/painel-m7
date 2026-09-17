@@ -338,6 +338,11 @@ function metaAdsLibraryUrl(value: string | null | undefined, companyName: string
   return `https://www.facebook.com/ads/library/?${params.toString()}`;
 }
 
+function instagramSearchUrl(lead: Lead) {
+  const query = [`"${lead.company_name}"`, lead.city, "Instagram"].filter(Boolean).join(" ");
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 function CrmComponent() {
   const sidebar = useAppSidebar();
   const [search, setSearch] = useState("");
@@ -995,6 +1000,17 @@ function LeadDialog({
                           Ver anúncios
                         </a>
                       </>
+                    )}
+                    {!String(draft.instagram_url ?? "").trim() && (
+                      <a
+                        href={instagramSearchUrl(lead)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-pink-300 hover:border-pink-500/50 hover:bg-zinc-700"
+                      >
+                        <Search className="h-4 w-4" />
+                        Buscar Instagram
+                      </a>
                     )}
                   </div>
                 )}
