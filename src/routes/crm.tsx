@@ -194,6 +194,49 @@ function radarM7(lead: Partial<Lead>) {
   };
 }
 
+function suggestedService(lead: Partial<Lead>) {
+  const site = lead.site_quality;
+  const traffic = lead.paid_traffic_status;
+  const score = Math.min(10, Math.max(0, Number(lead.score) || 0));
+  const radar = radarM7(lead);
+  const context = [
+    score >= 8 ? `Nota ${score.toFixed(1)} indica uma boa base para a abordagem.` : "",
+    radar && radar.total >= 70 ? `Radar M7 ${radar.total} mostra várias oportunidades.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (site === "none") {
+    return {
+      label: "Site",
+      className: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+      reason: `Sem site confirmado. É a oferta mais rápida e simples para estruturar a presença digital.${context ? ` ${context}` : ""}`,
+    };
+  }
+  if (site === "bad") {
+    return {
+      label: "Site",
+      className: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+      reason: `O site atual foi avaliado como ruim. A primeira oferta deve ser uma reformulação mais profissional e voltada à conversão.${context ? ` ${context}` : ""}`,
+    };
+  }
+  if (site === "good" && traffic === "no") {
+    return {
+      label: "Tráfego pago",
+      className: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+      reason: `O site já está preparado, mas a empresa não faz tráfego pago. A oportunidade é gerar demanda e levar mais pessoas para essa estrutura.${context ? ` ${context}` : ""}`,
+    };
+  }
+  if (site === "good" && traffic === "yes") {
+    return {
+      label: "Automação",
+      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+      reason: `A empresa já possui site bom e tráfego ativo. A melhor abertura é automação de atendimento, processos ou qualificação de contatos.${context ? ` ${context}` : ""}`,
+    };
+  }
+  return null;
+}
+
 export const Route = createFileRoute("/crm")({ component: CrmComponent });
 
 function money(value: number | null) {
@@ -626,6 +669,7 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
       ? instagramQualityBadge[lead.instagram_quality as keyof typeof instagramQualityBadge]
       : null;
   const radar = radarM7(lead);
+  const service = suggestedService(lead);
   return (
     <div
       role="button"
@@ -721,6 +765,14 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           )}
         </div>
       )}
+      {service && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-[10px]">
+          <span className="text-zinc-500">Serviço sugerido</span>
+          <span className={`rounded border px-1.5 py-0.5 font-semibold ${service.className}`}>
+            {service.label}
+          </span>
+        </div>
+      )}
       {lead.next_action_at && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300">
           <CalendarClock className="h-3 w-3" />
@@ -774,6 +826,7 @@ function LeadDialog({
   const field = (key: keyof Lead, value: unknown) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const radar = radarM7(draft);
+  const service = suggestedService(draft);
   return (
     <Dialog open={!!lead} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-zinc-700 bg-zinc-900 text-white sm:max-w-3xl">
@@ -963,6 +1016,15 @@ function LeadDialog({
                     <p className="text-xs text-zinc-500">
                       Avalie os três itens para ativar o Radar M7.
                     </p>
+                  )}
+                  {service && (
+                    <div className={`rounded-lg border p-3 text-xs ${service.className}`}>
+                      <p className="text-[11px] font-medium uppercase tracking-wide opacity-75">
+                        Serviço sugerido
+                      </p>
+                      <p className="mt-1 text-base font-bold">{service.label}</p>
+                      <p className="mt-1.5 leading-relaxed opacity-80">{service.reason}</p>
+                    </div>
                   )}
                 </div>
                 <div className="space-y-1.5">
