@@ -343,6 +343,48 @@ function instagramSearchUrl(lead: Lead) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
+function facebookUrl(value: string | null | undefined) {
+  const clean = value?.trim();
+  if (!clean) return "";
+  if (/^https?:\/\//i.test(clean)) return clean;
+  if (/^(www\.)?(facebook|fb)\.com\//i.test(clean)) return `https://${clean}`;
+  return `https://www.facebook.com/${clean.replace(/^@/, "").replace(/^\/+|\/+$/g, "")}`;
+}
+
+function facebookPageQuery(value: string | null | undefined, companyName: string) {
+  const clean = value?.trim();
+  if (!clean) return companyName.trim();
+  try {
+    const parsed = new URL(facebookUrl(clean));
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    const candidate = segments.find(
+      (segment) => !["pages", "pg", "profile.php"].includes(segment.toLowerCase()),
+    );
+    return candidate
+      ? decodeURIComponent(candidate).replace(/[-_.]+/g, " ").trim()
+      : companyName.trim();
+  } catch {
+    return clean.replace(/^@/, "").replace(/[-_.]+/g, " ").trim() || companyName.trim();
+  }
+}
+
+function facebookSearchUrl(lead: Lead) {
+  const query = [`"${lead.company_name}"`, lead.city, "Facebook"].filter(Boolean).join(" ");
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function facebookAdsLibraryUrl(value: string | null | undefined, companyName: string) {
+  const params = new URLSearchParams({
+    active_status: "active",
+    ad_type: "all",
+    country: "BR",
+    media_type: "all",
+    q: facebookPageQuery(value, companyName),
+    search_type: "keyword_unordered",
+  });
+  return `https://www.facebook.com/ads/library/?${params.toString()}`;
+}
+
 function CrmComponent() {
   const sidebar = useAppSidebar();
   const [search, setSearch] = useState("");
@@ -381,6 +423,7 @@ function CrmComponent() {
       (freshLead.assigned_to !== selected.assigned_to ||
         freshLead.assigned_to_name !== selected.assigned_to_name ||
         freshLead.stage !== selected.stage ||
+        freshLead.facebook_url !== selected.facebook_url ||
         freshLead.site_quality !== selected.site_quality ||
         freshLead.instagram_quality !== selected.instagram_quality ||
         freshLead.paid_traffic_status !== selected.paid_traffic_status)
@@ -1012,6 +1055,41 @@ function LeadDialog({
                         Buscar Instagram
                       </a>
                     )}
+                    {String(draft.facebook_url ?? "").trim() ? (
+                      <>
+                        <a
+                          href={facebookUrl(String(draft.facebook_url))}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-blue-500/50 hover:bg-zinc-700"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Abrir Facebook
+                        </a>
+                        <a
+                          href={facebookAdsLibraryUrl(
+                            String(draft.facebook_url),
+                            lead.company_name,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-amber-300 hover:border-amber-500/50 hover:bg-zinc-700"
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                          Ver anúncios
+                        </a>
+                      </>
+                    ) : (
+                      <a
+                        href={facebookSearchUrl(lead)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-blue-500/50 hover:bg-zinc-700"
+                      >
+                        <Search className="h-4 w-4" />
+                        Buscar Facebook
+                      </a>
+                    )}
                   </div>
                 )}
                 {(lead.maps_rating != null || lead.maps_reviews != null) && (
@@ -1123,6 +1201,57 @@ function LeadDialog({
                     >
                       <AtSign className="h-4 w-4" />
                       Abrir
+                    </a>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`facebook-${lead.id}`} className="text-xs text-zinc-400">
+                    Facebook
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      id={`facebook-${lead.id}`}
+                      type="text"
+                      inputMode="url"
+                      placeholder="Link ou nome da página"
+                      value={String(draft.facebook_url ?? "")}
+                      onChange={(e) => field("facebook_url", e.target.value)}
+                      className="min-w-56 flex-1 border-zinc-700 bg-zinc-950"
+                    />
+                    <a
+                      href={facebookUrl(String(draft.facebook_url ?? "")) || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-disabled={!String(draft.facebook_url ?? "").trim()}
+                      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
+                        String(draft.facebook_url ?? "").trim()
+                          ? "bg-zinc-800 text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                          : "pointer-events-none bg-zinc-900 text-zinc-600"
+                      }`}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Abrir
+                    </a>
+                    <a
+                      href={
+                        String(draft.facebook_url ?? "").trim()
+                          ? facebookAdsLibraryUrl(
+                              String(draft.facebook_url),
+                              lead.company_name,
+                            )
+                          : undefined
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-disabled={!String(draft.facebook_url ?? "").trim()}
+                      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
+                        String(draft.facebook_url ?? "").trim()
+                          ? "bg-zinc-800 text-amber-300 hover:border-zinc-600 hover:bg-zinc-700"
+                          : "pointer-events-none bg-zinc-900 text-zinc-600"
+                      }`}
+                    >
+                      <TrendingUp className="h-4 w-4" />
+                      Ver anúncios
                     </a>
                   </div>
                 </div>
@@ -1254,6 +1383,7 @@ function LeadDialog({
                     next_action: draft.next_action,
                     next_action_at: draft.next_action_at,
                     instagram_url: draft.instagram_url,
+                    facebook_url: draft.facebook_url,
                     address_verified: draft.address_verified,
                     site_quality: draft.site_quality,
                     instagram_quality: draft.instagram_quality,

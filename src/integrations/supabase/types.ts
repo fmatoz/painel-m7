@@ -133,6 +133,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           email: string;
+          facebook_url: string;
           group_message_id: string | null;
           group_sent_at: string | null;
           id: string;
@@ -174,6 +175,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           email?: string;
+          facebook_url?: string;
           group_message_id?: string | null;
           group_sent_at?: string | null;
           id?: string;
@@ -214,6 +216,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           email?: string;
+          facebook_url?: string;
           group_message_id?: string | null;
           group_sent_at?: string | null;
           id?: string;
