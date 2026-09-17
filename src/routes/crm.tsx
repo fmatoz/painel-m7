@@ -311,6 +311,30 @@ function instagramUrl(value: string | null | undefined) {
   return `https://www.instagram.com/${clean.replace(/^@/, "").replace(/^\/+|\/+$/g, "")}`;
 }
 
+function instagramHandle(value: string | null | undefined) {
+  const clean = value?.trim();
+  if (!clean) return "";
+  try {
+    const parsed = new URL(instagramUrl(clean));
+    return parsed.pathname.split("/").filter(Boolean)[0]?.replace(/^@/, "") ?? "";
+  } catch {
+    return clean.replace(/^@/, "").split(/[/?#]/)[0];
+  }
+}
+
+function metaAdsLibraryUrl(value: string | null | undefined, companyName: string) {
+  const query = instagramHandle(value) || companyName.trim();
+  const params = new URLSearchParams({
+    active_status: "active",
+    ad_type: "all",
+    country: "BR",
+    media_type: "all",
+    q: query,
+    search_type: "keyword_unordered",
+  });
+  return `https://www.facebook.com/ads/library/?${params.toString()}`;
+}
+
 function CrmComponent() {
   const sidebar = useAppSidebar();
   const [search, setSearch] = useState("");
@@ -942,6 +966,31 @@ function LeadDialog({
                         <Search className="h-4 w-4" />
                         Verificar no Maps
                       </a>
+                    )}
+                    {String(draft.instagram_url ?? "").trim() && (
+                      <>
+                        <a
+                          href={instagramUrl(String(draft.instagram_url))}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-pink-300 hover:border-pink-500/50 hover:bg-zinc-700"
+                        >
+                          <AtSign className="h-4 w-4" />
+                          Abrir Instagram
+                        </a>
+                        <a
+                          href={metaAdsLibraryUrl(
+                            String(draft.instagram_url),
+                            lead.company_name,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-amber-300 hover:border-amber-500/50 hover:bg-zinc-700"
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                          Ver anúncios
+                        </a>
+                      </>
                     )}
                   </div>
                 )}
