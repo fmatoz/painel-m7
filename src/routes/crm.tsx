@@ -128,7 +128,7 @@ const sourceStyle: Record<string, string> = {
 };
 
 const siteQualityBadge = {
-  none: { label: "Sem site", className: "border-zinc-600 bg-zinc-800 text-zinc-300" },
+  none: { label: "Sem site", className: "border-rose-500/40 bg-rose-500/10 text-rose-300" },
   bad: { label: "Site ruim", className: "border-rose-500/40 bg-rose-500/10 text-rose-300" },
   good: {
     label: "Site bom",
@@ -139,23 +139,26 @@ const siteQualityBadge = {
 const paidTrafficBadge = {
   yes: {
     label: "Faz tráfego pago",
-    className: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+    className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
   },
   no: {
     label: "Sem tráfego pago",
-    className: "border-zinc-600 bg-zinc-800 text-zinc-300",
+    className: "border-rose-500/40 bg-rose-500/10 text-rose-300",
   },
 } as const;
 
 const instagramQualityBadge = {
-  none: { label: "Sem Instagram", className: "border-zinc-600 bg-zinc-800 text-zinc-300" },
+  none: {
+    label: "Sem Instagram",
+    className: "border-rose-500/40 bg-rose-500/10 text-rose-300",
+  },
   bad: {
     label: "Instagram ruim",
     className: "border-rose-500/40 bg-rose-500/10 text-rose-300",
   },
   good: {
     label: "Instagram bom",
-    className: "border-pink-500/40 bg-pink-500/10 text-pink-300",
+    className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
   },
 } as const;
 
