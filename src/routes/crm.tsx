@@ -5,6 +5,7 @@ import {
   AtSign,
   Building2,
   CalendarClock,
+  Clipboard,
   Columns3,
   ExternalLink,
   Flame,
@@ -19,6 +20,7 @@ import {
   Phone,
   RefreshCw,
   Search,
+  Star,
   TrendingUp,
   UserCheck,
   UserRound,
@@ -40,9 +42,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
 import { useAppAccess } from "@/hooks/use-access";
+import {
+  MATERIAL_FORMAT_BADGE_STYLES,
+  MATERIAL_FORMAT_LABELS,
+  normalizeMaterialFormat,
+  readFavoriteMaterialIds,
+} from "@/lib/crm-materials";
 
 type Lead = Tables<"crm_leads">;
 type Activity = Tables<"crm_activities">;
+type Material = Tables<"crm_materials">;
 type Stage = Lead["stage"];
 type WebsiteFilter = "all" | "with" | "without";
 
@@ -170,22 +179,13 @@ const radarPoints = {
 
 function radarM7(lead: Partial<Lead>) {
   const site = lead.site_quality as keyof typeof radarPoints.site | null | undefined;
-  const instagram = lead.instagram_quality as
-    | keyof typeof radarPoints.instagram
-    | null
-    | undefined;
-  const traffic = lead.paid_traffic_status as
-    | keyof typeof radarPoints.traffic
-    | null
-    | undefined;
+  const instagram = lead.instagram_quality as keyof typeof radarPoints.instagram | null | undefined;
+  const traffic = lead.paid_traffic_status as keyof typeof radarPoints.traffic | null | undefined;
   if (!site || !instagram || !traffic) return null;
   if (!(site in radarPoints.site) || !(instagram in radarPoints.instagram)) return null;
   if (!(traffic in radarPoints.traffic)) return null;
   const manual =
-    20 +
-    radarPoints.site[site] +
-    radarPoints.instagram[instagram] +
-    radarPoints.traffic[traffic];
+    20 + radarPoints.site[site] + radarPoints.instagram[instagram] + radarPoints.traffic[traffic];
   const legacyScore = Math.min(10, Math.max(0, Number(lead.score) || 0));
   return {
     total: Math.round(manual * 0.8 + legacyScore * 2),
@@ -361,10 +361,17 @@ function facebookPageQuery(value: string | null | undefined, companyName: string
       (segment) => !["pages", "pg", "profile.php"].includes(segment.toLowerCase()),
     );
     return candidate
-      ? decodeURIComponent(candidate).replace(/[-_.]+/g, " ").trim()
+      ? decodeURIComponent(candidate)
+          .replace(/[-_.]+/g, " ")
+          .trim()
       : companyName.trim();
   } catch {
-    return clean.replace(/^@/, "").replace(/[-_.]+/g, " ").trim() || companyName.trim();
+    return (
+      clean
+        .replace(/^@/, "")
+        .replace(/[-_.]+/g, " ")
+        .trim() || companyName.trim()
+    );
   }
 }
 
@@ -892,20 +899,40 @@ function LeadDialog({
 }) {
   const [draft, setDraft] = useState<Partial<Lead>>({});
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [favoriteMaterialIds, setFavoriteMaterialIds] = useState<string[]>([]);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const materialsQuery = useQuery({
+    queryKey: ["crm-materials"],
+    queryFn: () => crmApi<Material[]>(accessToken, { action: "material-list" }),
+    enabled: Boolean(lead),
+    staleTime: 10_000,
+  });
   useEffect(() => {
     setDraft(lead ?? {});
+    setSelectedMaterial(null);
+    setFavoriteMaterialIds(readFavoriteMaterialIds(currentUserId));
     if (!lead) return;
     void crmApi<Activity[]>(accessToken, { action: "activities", leadId: lead.id })
       .then((data) => setActivities(data ?? []))
       .catch(() => setActivities([]));
-  }, [lead, accessToken]);
+  }, [lead, accessToken, currentUserId]);
+  const favoriteMaterials = useMemo(() => {
+    const favorites = new Set(favoriteMaterialIds);
+    return (materialsQuery.data ?? [])
+      .filter((material) => favorites.has(material.id))
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  }, [favoriteMaterialIds, materialsQuery.data]);
   const field = (key: keyof Lead, value: unknown) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const radar = radarM7(draft);
   const service = suggestedService(draft);
   return (
     <Dialog open={!!lead} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto border-zinc-700 bg-zinc-900 text-white sm:max-w-3xl">
+      <DialogContent
+        className={`max-h-[92vh] overflow-y-auto border-zinc-700 bg-zinc-900 text-white ${
+          selectedMaterial ? "sm:max-w-6xl" : "sm:max-w-3xl"
+        }`}
+      >
         {lead && (
           <>
             <DialogHeader>
@@ -928,498 +955,626 @@ function LeadDialog({
                 {lead.state ? `/${lead.state}` : ""}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-4">
-                {lead.source !== "Maps" && (
-                  <Info
-                    icon={<UserRound />}
-                    label="Sócio / responsável"
-                    value={lead.partner_name || "Não informado"}
-                  />
-                )}
-                <Info
-                  icon={<Phone />}
-                  label="Telefone / WhatsApp"
-                  value={lead.phone || "Não informado"}
-                />
-                {lead.source !== "Maps" && (
-                  <Info icon={<Mail />} label="E-mail" value={lead.email || "Não informado"} />
-                )}
-                {lead.source !== "Maps" && (
-                  <Info
-                    icon={<Building2 />}
-                    label="Capital social"
-                    value={money(lead.capital_social)}
-                  />
-                )}
-                {lead.source === "Maps" && (
-                  <p
-                    className={`rounded-lg p-3 text-sm ${hasOwnWebsite(lead.website) ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"}`}
-                  >
-                    {hasOwnWebsite(lead.website)
-                      ? "Possui site próprio"
-                      : "Não possui site próprio"}
-                  </p>
-                )}
-                {lead.address && (
-                  <Info icon={<Building2 />} label="Endereço" value={lead.address} />
-                )}
-                {lead.source !== "Maps" && (
-                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm transition hover:border-emerald-500/60">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(draft.address_verified)}
-                      onChange={(event) => field("address_verified", event.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-emerald-500"
+            <div
+              className={
+                selectedMaterial
+                  ? "grid items-start gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(18rem,1.25fr)]"
+                  : ""
+              }
+            >
+              <div className="min-w-0 space-y-4">
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="space-y-4">
+                    {lead.source !== "Maps" && (
+                      <Info
+                        icon={<UserRound />}
+                        label="Sócio / responsável"
+                        value={lead.partner_name || "Não informado"}
+                      />
+                    )}
+                    <Info
+                      icon={<Phone />}
+                      label="Telefone / WhatsApp"
+                      value={lead.phone || "Não informado"}
                     />
-                    <MapPinCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-                    <span>
-                      <span className="block font-medium text-zinc-200">
-                        Empresa confirmada neste endereço
-                      </span>
-                      <span className="mt-1 block text-xs text-zinc-500">
-                        Marque após confirmar pelo Google Maps ou outra fonte.
-                      </span>
-                    </span>
-                  </label>
-                )}
-                {(lead.website || lead.source) && (
-                  <div className="flex flex-wrap gap-2">
-                    {lead.website && (
-                      <a
-                        href={
-                          lead.website.startsWith("http") ? lead.website : `https://${lead.website}`
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        Abrir site
-                      </a>
+                    {lead.source !== "Maps" && (
+                      <Info icon={<Mail />} label="E-mail" value={lead.email || "Não informado"} />
                     )}
-                    {lead.source === "Maps" || lead.source === "Maps + CNPJ" ? (
-                      <a
-                        href={googleMapsUrl(lead)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        Abrir no Maps
-                      </a>
-                    ) : (
-                      <a
-                        href={googleMapsUrl(lead)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
-                      >
-                        <Search className="h-4 w-4" />
-                        Verificar no Maps
-                      </a>
+                    {lead.source !== "Maps" && (
+                      <Info
+                        icon={<Building2 />}
+                        label="Capital social"
+                        value={money(lead.capital_social)}
+                      />
                     )}
-                    {String(draft.instagram_url ?? "").trim() && (
-                      <>
+                    {lead.source === "Maps" && (
+                      <p
+                        className={`rounded-lg p-3 text-sm ${hasOwnWebsite(lead.website) ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"}`}
+                      >
+                        {hasOwnWebsite(lead.website)
+                          ? "Possui site próprio"
+                          : "Não possui site próprio"}
+                      </p>
+                    )}
+                    {lead.address && (
+                      <Info icon={<Building2 />} label="Endereço" value={lead.address} />
+                    )}
+                    {lead.source !== "Maps" && (
+                      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm transition hover:border-emerald-500/60">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(draft.address_verified)}
+                          onChange={(event) => field("address_verified", event.target.checked)}
+                          className="mt-0.5 h-4 w-4 accent-emerald-500"
+                        />
+                        <MapPinCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                        <span>
+                          <span className="block font-medium text-zinc-200">
+                            Empresa confirmada neste endereço
+                          </span>
+                          <span className="mt-1 block text-xs text-zinc-500">
+                            Marque após confirmar pelo Google Maps ou outra fonte.
+                          </span>
+                        </span>
+                      </label>
+                    )}
+                    {(lead.website || lead.source) && (
+                      <div className="flex flex-wrap gap-2">
+                        {lead.website && (
+                          <a
+                            href={
+                              lead.website.startsWith("http")
+                                ? lead.website
+                                : `https://${lead.website}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Abrir site
+                          </a>
+                        )}
+                        {lead.source === "Maps" || lead.source === "Maps + CNPJ" ? (
+                          <a
+                            href={googleMapsUrl(lead)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Abrir no Maps
+                          </a>
+                        ) : (
+                          <a
+                            href={googleMapsUrl(lead)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                          >
+                            <Search className="h-4 w-4" />
+                            Verificar no Maps
+                          </a>
+                        )}
+                        {String(draft.instagram_url ?? "").trim() && (
+                          <>
+                            <a
+                              href={instagramUrl(String(draft.instagram_url))}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-pink-300 hover:border-pink-500/50 hover:bg-zinc-700"
+                            >
+                              <AtSign className="h-4 w-4" />
+                              Abrir Instagram
+                            </a>
+                            <a
+                              href={metaAdsLibraryUrl(
+                                String(draft.instagram_url),
+                                lead.company_name,
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-amber-300 hover:border-amber-500/50 hover:bg-zinc-700"
+                            >
+                              <TrendingUp className="h-4 w-4" />
+                              Ver anúncios
+                            </a>
+                          </>
+                        )}
+                        {!String(draft.instagram_url ?? "").trim() && (
+                          <a
+                            href={instagramSearchUrl(lead)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-pink-300 hover:border-pink-500/50 hover:bg-zinc-700"
+                          >
+                            <Search className="h-4 w-4" />
+                            Buscar Instagram
+                          </a>
+                        )}
+                        {String(draft.facebook_url ?? "").trim() ? (
+                          <>
+                            <a
+                              href={facebookUrl(String(draft.facebook_url))}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-blue-500/50 hover:bg-zinc-700"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Abrir Facebook
+                            </a>
+                            <a
+                              href={facebookAdsLibraryUrl(
+                                String(draft.facebook_url),
+                                lead.company_name,
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-amber-300 hover:border-amber-500/50 hover:bg-zinc-700"
+                            >
+                              <TrendingUp className="h-4 w-4" />
+                              Ver anúncios
+                            </a>
+                          </>
+                        ) : (
+                          <a
+                            href={facebookSearchUrl(lead)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-blue-500/50 hover:bg-zinc-700"
+                          >
+                            <Search className="h-4 w-4" />
+                            Buscar Facebook
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {(lead.maps_rating != null || lead.maps_reviews != null) && (
+                      <p className="rounded-lg bg-blue-500/10 p-3 text-sm text-blue-200">
+                        Google Maps: {lead.maps_rating ?? "-"} estrelas · {lead.maps_reviews ?? 0}{" "}
+                        avaliações
+                      </p>
+                    )}
+                    <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-200">Qualificação rápida</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          Somente respostas confirmadas aparecem no card fechado.
+                        </p>
+                      </div>
+                      <QualificationChoice
+                        label="Site"
+                        value={draft.site_quality}
+                        onChange={(value) => field("site_quality", value)}
+                        options={[
+                          { value: null, label: "Não analisado" },
+                          { value: "none", label: "Não tem" },
+                          { value: "bad", label: "Ruim" },
+                          { value: "good", label: "Bom" },
+                        ]}
+                      />
+                      <QualificationChoice
+                        label="Instagram"
+                        value={draft.instagram_quality}
+                        onChange={(value) => field("instagram_quality", value)}
+                        options={[
+                          { value: null, label: "Não analisado" },
+                          { value: "none", label: "Não tem" },
+                          { value: "bad", label: "Ruim" },
+                          { value: "good", label: "Bom" },
+                        ]}
+                      />
+                      <QualificationChoice
+                        label="Tráfego pago"
+                        value={draft.paid_traffic_status}
+                        onChange={(value) => field("paid_traffic_status", value)}
+                        options={[
+                          { value: null, label: "Não analisado" },
+                          { value: "no", label: "Não faz" },
+                          { value: "yes", label: "Faz" },
+                        ]}
+                      />
+                      {radar ? (
+                        <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 p-3 text-xs text-orange-100">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="inline-flex items-center gap-1.5 font-semibold">
+                              <Flame className="h-4 w-4 text-orange-400" /> Radar M7
+                            </span>
+                            <span className="text-base font-bold text-orange-300">
+                              {radar.total}/100
+                            </span>
+                          </div>
+                          <p className="mt-1.5 text-orange-200/75">
+                            Indica quantas possibilidades de solução podem ser exploradas. Não é
+                            prioridade nem chance de fechamento.
+                          </p>
+                          <p className="mt-2 text-[11px] text-orange-200/60">
+                            Manual {radar.manual}: Base 20 · Site +{radar.site} · Instagram +
+                            {radar.instagram} · Tráfego +{radar.traffic}
+                          </p>
+                          <p className="mt-1 text-[11px] font-medium text-orange-200/80">
+                            Cálculo: {radar.manual} × 80% + Nota {radar.legacyScore.toFixed(1)} × 2
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">
+                          Avalie os três itens para ativar o Radar M7.
+                        </p>
+                      )}
+                      {service && (
+                        <div className={`rounded-lg border p-3 text-xs ${service.className}`}>
+                          <p className="text-[11px] font-medium uppercase tracking-wide opacity-75">
+                            Serviço sugerido
+                          </p>
+                          <p className="mt-1 text-base font-bold">{service.label}</p>
+                          <p className="mt-1.5 leading-relaxed opacity-80">{service.reason}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor={`instagram-${lead.id}`} className="text-xs text-zinc-400">
+                        Instagram
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          id={`instagram-${lead.id}`}
+                          type="text"
+                          inputMode="url"
+                          placeholder="Link ou @usuario"
+                          value={String(draft.instagram_url ?? "")}
+                          onChange={(e) => field("instagram_url", e.target.value)}
+                          className="border-zinc-700 bg-zinc-950"
+                        />
                         <a
-                          href={instagramUrl(String(draft.instagram_url))}
+                          href={instagramUrl(String(draft.instagram_url ?? "")) || undefined}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-pink-300 hover:border-pink-500/50 hover:bg-zinc-700"
+                          aria-disabled={!String(draft.instagram_url ?? "").trim()}
+                          className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
+                            String(draft.instagram_url ?? "").trim()
+                              ? "bg-zinc-800 text-pink-300 hover:border-zinc-600 hover:bg-zinc-700"
+                              : "pointer-events-none bg-zinc-900 text-zinc-600"
+                          }`}
                         >
                           <AtSign className="h-4 w-4" />
-                          Abrir Instagram
+                          Abrir
                         </a>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor={`facebook-${lead.id}`} className="text-xs text-zinc-400">
+                        Facebook
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          id={`facebook-${lead.id}`}
+                          type="text"
+                          inputMode="url"
+                          placeholder="Link ou nome da página"
+                          value={String(draft.facebook_url ?? "")}
+                          onChange={(e) => field("facebook_url", e.target.value)}
+                          className="min-w-56 flex-1 border-zinc-700 bg-zinc-950"
+                        />
                         <a
-                          href={metaAdsLibraryUrl(
-                            String(draft.instagram_url),
-                            lead.company_name,
-                          )}
+                          href={facebookUrl(String(draft.facebook_url ?? "")) || undefined}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-amber-300 hover:border-amber-500/50 hover:bg-zinc-700"
-                        >
-                          <TrendingUp className="h-4 w-4" />
-                          Ver anúncios
-                        </a>
-                      </>
-                    )}
-                    {!String(draft.instagram_url ?? "").trim() && (
-                      <a
-                        href={instagramSearchUrl(lead)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-pink-300 hover:border-pink-500/50 hover:bg-zinc-700"
-                      >
-                        <Search className="h-4 w-4" />
-                        Buscar Instagram
-                      </a>
-                    )}
-                    {String(draft.facebook_url ?? "").trim() ? (
-                      <>
-                        <a
-                          href={facebookUrl(String(draft.facebook_url))}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-blue-500/50 hover:bg-zinc-700"
+                          aria-disabled={!String(draft.facebook_url ?? "").trim()}
+                          className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
+                            String(draft.facebook_url ?? "").trim()
+                              ? "bg-zinc-800 text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
+                              : "pointer-events-none bg-zinc-900 text-zinc-600"
+                          }`}
                         >
                           <ExternalLink className="h-4 w-4" />
-                          Abrir Facebook
+                          Abrir
                         </a>
                         <a
-                          href={facebookAdsLibraryUrl(
-                            String(draft.facebook_url),
-                            lead.company_name,
-                          )}
+                          href={
+                            String(draft.facebook_url ?? "").trim()
+                              ? facebookAdsLibraryUrl(String(draft.facebook_url), lead.company_name)
+                              : undefined
+                          }
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-amber-300 hover:border-amber-500/50 hover:bg-zinc-700"
+                          aria-disabled={!String(draft.facebook_url ?? "").trim()}
+                          className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
+                            String(draft.facebook_url ?? "").trim()
+                              ? "bg-zinc-800 text-amber-300 hover:border-zinc-600 hover:bg-zinc-700"
+                              : "pointer-events-none bg-zinc-900 text-zinc-600"
+                          }`}
                         >
                           <TrendingUp className="h-4 w-4" />
                           Ver anúncios
                         </a>
-                      </>
-                    ) : (
-                      <a
-                        href={facebookSearchUrl(lead)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-blue-300 hover:border-blue-500/50 hover:bg-zinc-700"
-                      >
-                        <Search className="h-4 w-4" />
-                        Buscar Facebook
-                      </a>
+                      </div>
+                    </div>
+                    {lead.cnpj && (
+                      <p className="rounded-lg bg-fuchsia-500/10 p-3 text-sm text-fuchsia-200">
+                        CNPJ {lead.cnpj}
+                        {lead.cnae ? ` · ${lead.cnae}` : ""}
+                      </p>
                     )}
                   </div>
-                )}
-                {(lead.maps_rating != null || lead.maps_reviews != null) && (
-                  <p className="rounded-lg bg-blue-500/10 p-3 text-sm text-blue-200">
-                    Google Maps: {lead.maps_rating ?? "-"} estrelas · {lead.maps_reviews ?? 0}{" "}
-                    avaliações
-                  </p>
-                )}
-                <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">Qualificação rápida</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      Somente respostas confirmadas aparecem no card fechado.
-                    </p>
-                  </div>
-                  <QualificationChoice
-                    label="Site"
-                    value={draft.site_quality}
-                    onChange={(value) => field("site_quality", value)}
-                    options={[
-                      { value: null, label: "Não analisado" },
-                      { value: "none", label: "Não tem" },
-                      { value: "bad", label: "Ruim" },
-                      { value: "good", label: "Bom" },
-                    ]}
-                  />
-                  <QualificationChoice
-                    label="Instagram"
-                    value={draft.instagram_quality}
-                    onChange={(value) => field("instagram_quality", value)}
-                    options={[
-                      { value: null, label: "Não analisado" },
-                      { value: "none", label: "Não tem" },
-                      { value: "bad", label: "Ruim" },
-                      { value: "good", label: "Bom" },
-                    ]}
-                  />
-                  <QualificationChoice
-                    label="Tráfego pago"
-                    value={draft.paid_traffic_status}
-                    onChange={(value) => field("paid_traffic_status", value)}
-                    options={[
-                      { value: null, label: "Não analisado" },
-                      { value: "no", label: "Não faz" },
-                      { value: "yes", label: "Faz" },
-                    ]}
-                  />
-                  {radar ? (
-                    <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 p-3 text-xs text-orange-100">
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+                      {lead.assigned_to_name && (
+                        <div className="mb-3 flex items-center gap-2 text-sm text-violet-200">
+                          <UserCheck className="h-4 w-4" />
+                          <span>{lead.assigned_to_name}</span>
+                        </div>
+                      )}
+                      {!lead.assigned_to ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => onAssign("claim")}
+                          disabled={assigning}
+                          className="w-full bg-violet-600 hover:bg-violet-500"
+                        >
+                          {assigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Assumir lead
+                        </Button>
+                      ) : lead.assigned_to === currentUserId ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onAssign("release")}
+                          disabled={assigning}
+                          className="w-full border-zinc-700 bg-zinc-900"
+                        >
+                          Liberar lead
+                        </Button>
+                      ) : isAdmin ? (
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => onAssign("takeover")}
+                            disabled={assigning}
+                            className="flex-1 bg-violet-600 hover:bg-violet-500"
+                          >
+                            Transferir para mim
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onAssign("release")}
+                            disabled={assigning}
+                            className="border-zinc-700 bg-zinc-900"
+                          >
+                            Liberar
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <label className="block text-xs text-zinc-400">
+                      Etapa
+                      <select
+                        value={String(draft.stage ?? lead.stage)}
+                        onChange={(e) => field("stage", e.target.value)}
+                        className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-white"
+                      >
+                        {stages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs text-zinc-400">
+                      Serviço de interesse
+                      <Input
+                        value={String(draft.service_interest ?? "")}
+                        onChange={(e) => field("service_interest", e.target.value)}
+                        className="mt-1 border-zinc-700 bg-zinc-950"
+                      />
+                    </label>
+                    <label className="block text-xs text-zinc-400">
+                      Próxima ação
+                      <Input
+                        value={String(draft.next_action ?? "")}
+                        onChange={(e) => field("next_action", e.target.value)}
+                        className="mt-1 border-zinc-700 bg-zinc-950"
+                      />
+                    </label>
+                    <label className="block text-xs text-zinc-400">
+                      Data da próxima ação
+                      <Input
+                        type="datetime-local"
+                        value={
+                          draft.next_action_at ? String(draft.next_action_at).slice(0, 16) : ""
+                        }
+                        onChange={(e) =>
+                          field(
+                            "next_action_at",
+                            e.target.value ? new Date(e.target.value).toISOString() : null,
+                          )
+                        }
+                        className="mt-1 border-zinc-700 bg-zinc-950"
+                      />
+                    </label>
+                    <label className="block text-xs text-zinc-400">
+                      Anotações
+                      <Textarea
+                        value={String(draft.notes ?? "")}
+                        onChange={(e) => field("notes", e.target.value)}
+                        rows={4}
+                        className="mt-1 border-zinc-700 bg-zinc-950"
+                      />
+                    </label>
+                    <div className="space-y-2 pt-1">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="inline-flex items-center gap-1.5 font-semibold">
-                          <Flame className="h-4 w-4 text-orange-400" /> Radar M7
+                        <p className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                          Materiais favoritos
+                        </p>
+                        {favoriteMaterials.length > 0 && (
+                          <span className="text-[11px] text-zinc-500">
+                            {favoriteMaterials.length} favorito
+                            {favoriteMaterials.length === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </div>
+                      {materialsQuery.isLoading ? (
+                        <div className="flex min-h-24 items-center justify-center rounded-lg border border-dashed border-zinc-800">
+                          <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+                        </div>
+                      ) : favoriteMaterials.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-zinc-800 px-3 py-5 text-center text-xs text-zinc-500">
+                          Favorite materiais na seção Materiais para acessá-los aqui.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          {favoriteMaterials.map((material) => {
+                            const format = normalizeMaterialFormat(material.content_format);
+                            return (
+                              <button
+                                key={material.id}
+                                type="button"
+                                onClick={() => setSelectedMaterial(material)}
+                                className={`group relative aspect-square min-h-32 rounded-xl border bg-zinc-950 p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-500/70 hover:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  selectedMaterial?.id === material.id
+                                    ? "border-blue-500"
+                                    : "border-zinc-800"
+                                }`}
+                              >
+                                <span
+                                  className={`absolute left-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-medium ${MATERIAL_FORMAT_BADGE_STYLES[format]}`}
+                                >
+                                  {MATERIAL_FORMAT_LABELS[format]}
+                                </span>
+                                <span className="flex h-full items-center justify-center px-1 pb-4 text-center text-sm font-semibold leading-snug text-zinc-100">
+                                  {material.title}
+                                </span>
+                                <span className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate text-[10px] text-zinc-500 group-hover:text-zinc-400">
+                                  {material.author_name}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={onClose}
+                    className="border-zinc-700 bg-zinc-900"
+                  >
+                    Fechar
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      onSave({
+                        stage: draft.stage,
+                        service_interest: draft.service_interest,
+                        next_action: draft.next_action,
+                        next_action_at: draft.next_action_at,
+                        instagram_url: draft.instagram_url,
+                        facebook_url: draft.facebook_url,
+                        address_verified: draft.address_verified,
+                        site_quality: draft.site_quality,
+                        instagram_quality: draft.instagram_quality,
+                        paid_traffic_status: draft.paid_traffic_status,
+                        notes: draft.notes,
+                      })
+                    }
+                    disabled={saving}
+                  >
+                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar
+                  </Button>
+                  <Button
+                    onClick={onSend}
+                    disabled={sending}
+                    className="bg-emerald-600 hover:bg-emerald-500"
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    {lead.group_sent_at ? "Enviar novamente" : "Enviar no WhatsApp"}
+                  </Button>
+                </div>
+                {activities.length > 0 && (
+                  <div className="border-t border-zinc-800 pt-4">
+                    <h3 className="mb-2 text-sm font-semibold">Histórico</h3>
+                    <div className="space-y-2">
+                      {activities.map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex justify-between gap-4 text-xs text-zinc-400"
+                        >
+                          <span>{activity.description}</span>
+                          <span className="shrink-0">{when(activity.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {selectedMaterial && (
+                <aside className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-950/80 p-4 xl:sticky xl:top-0 xl:max-h-[78vh] xl:overflow-y-auto">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-md border px-2 py-1 text-[11px] font-medium ${MATERIAL_FORMAT_BADGE_STYLES[normalizeMaterialFormat(selectedMaterial.content_format)]}`}
+                        >
+                          {
+                            MATERIAL_FORMAT_LABELS[
+                              normalizeMaterialFormat(selectedMaterial.content_format)
+                            ]
+                          }
                         </span>
-                        <span className="text-base font-bold text-orange-300">
-                          {radar.total}/100
+                        <span className="text-[11px] text-zinc-500">
+                          {selectedMaterial.author_name}
                         </span>
                       </div>
-                      <p className="mt-1.5 text-orange-200/75">
-                        Indica quantas possibilidades de solução podem ser exploradas. Não é
-                        prioridade nem chance de fechamento.
-                      </p>
-                      <p className="mt-2 text-[11px] text-orange-200/60">
-                        Manual {radar.manual}: Base 20 · Site +{radar.site} · Instagram +
-                        {radar.instagram} · Tráfego +{radar.traffic}
-                      </p>
-                      <p className="mt-1 text-[11px] font-medium text-orange-200/80">
-                        Cálculo: {radar.manual} × 80% + Nota {radar.legacyScore.toFixed(1)} × 2
-                      </p>
+                      <h3 className="text-lg font-semibold leading-snug text-zinc-100">
+                        {selectedMaterial.title}
+                      </h3>
                     </div>
-                  ) : (
-                    <p className="text-xs text-zinc-500">
-                      Avalie os três itens para ativar o Radar M7.
-                    </p>
-                  )}
-                  {service && (
-                    <div className={`rounded-lg border p-3 text-xs ${service.className}`}>
-                      <p className="text-[11px] font-medium uppercase tracking-wide opacity-75">
-                        Serviço sugerido
-                      </p>
-                      <p className="mt-1 text-base font-bold">{service.label}</p>
-                      <p className="mt-1.5 leading-relaxed opacity-80">{service.reason}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label htmlFor={`instagram-${lead.id}`} className="text-xs text-zinc-400">
-                    Instagram
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      id={`instagram-${lead.id}`}
-                      type="text"
-                      inputMode="url"
-                      placeholder="Link ou @usuario"
-                      value={String(draft.instagram_url ?? "")}
-                      onChange={(e) => field("instagram_url", e.target.value)}
-                      className="border-zinc-700 bg-zinc-950"
-                    />
-                    <a
-                      href={instagramUrl(String(draft.instagram_url ?? "")) || undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-disabled={!String(draft.instagram_url ?? "").trim()}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
-                        String(draft.instagram_url ?? "").trim()
-                          ? "bg-zinc-800 text-pink-300 hover:border-zinc-600 hover:bg-zinc-700"
-                          : "pointer-events-none bg-zinc-900 text-zinc-600"
-                      }`}
-                    >
-                      <AtSign className="h-4 w-4" />
-                      Abrir
-                    </a>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label htmlFor={`facebook-${lead.id}`} className="text-xs text-zinc-400">
-                    Facebook
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <Input
-                      id={`facebook-${lead.id}`}
-                      type="text"
-                      inputMode="url"
-                      placeholder="Link ou nome da página"
-                      value={String(draft.facebook_url ?? "")}
-                      onChange={(e) => field("facebook_url", e.target.value)}
-                      className="min-w-56 flex-1 border-zinc-700 bg-zinc-950"
-                    />
-                    <a
-                      href={facebookUrl(String(draft.facebook_url ?? "")) || undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-disabled={!String(draft.facebook_url ?? "").trim()}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
-                        String(draft.facebook_url ?? "").trim()
-                          ? "bg-zinc-800 text-blue-300 hover:border-zinc-600 hover:bg-zinc-700"
-                          : "pointer-events-none bg-zinc-900 text-zinc-600"
-                      }`}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Abrir
-                    </a>
-                    <a
-                      href={
-                        String(draft.facebook_url ?? "").trim()
-                          ? facebookAdsLibraryUrl(
-                              String(draft.facebook_url),
-                              lead.company_name,
-                            )
-                          : undefined
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-disabled={!String(draft.facebook_url ?? "").trim()}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-sm ${
-                        String(draft.facebook_url ?? "").trim()
-                          ? "bg-zinc-800 text-amber-300 hover:border-zinc-600 hover:bg-zinc-700"
-                          : "pointer-events-none bg-zinc-900 text-zinc-600"
-                      }`}
-                    >
-                      <TrendingUp className="h-4 w-4" />
-                      Ver anúncios
-                    </a>
-                  </div>
-                </div>
-                {lead.cnpj && (
-                  <p className="rounded-lg bg-fuchsia-500/10 p-3 text-sm text-fuchsia-200">
-                    CNPJ {lead.cnpj}
-                    {lead.cnae ? ` · ${lead.cnae}` : ""}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-3">
-                <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
-                  {lead.assigned_to_name && (
-                    <div className="mb-3 flex items-center gap-2 text-sm text-violet-200">
-                      <UserCheck className="h-4 w-4" />
-                      <span>{lead.assigned_to_name}</span>
-                    </div>
-                  )}
-                  {!lead.assigned_to ? (
-                    <Button
+                    <button
                       type="button"
-                      size="sm"
-                      onClick={() => onAssign("claim")}
-                      disabled={assigning}
-                      className="w-full bg-violet-600 hover:bg-violet-500"
+                      onClick={() => setSelectedMaterial(null)}
+                      aria-label="Fechar material"
+                      className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-white"
                     >
-                      {assigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Assumir lead
-                    </Button>
-                  ) : lead.assigned_to === currentUserId ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onAssign("release")}
-                      disabled={assigning}
-                      className="w-full border-zinc-700 bg-zinc-900"
-                    >
-                      Liberar lead
-                    </Button>
-                  ) : isAdmin ? (
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => onAssign("takeover")}
-                        disabled={assigning}
-                        className="flex-1 bg-violet-600 hover:bg-violet-500"
-                      >
-                        Transferir para mim
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onAssign("release")}
-                        disabled={assigning}
-                        className="border-zinc-700 bg-zinc-900"
-                      >
-                        Liberar
-                      </Button>
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {selectedMaterial.usage_context && (
+                    <div className="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
+                        Uso
+                      </p>
+                      <p className="text-sm leading-5 text-zinc-300">
+                        {selectedMaterial.usage_context}
+                      </p>
                     </div>
-                  ) : null}
-                </div>
-                <label className="block text-xs text-zinc-400">
-                  Etapa
-                  <select
-                    value={String(draft.stage ?? lead.stage)}
-                    onChange={(e) => field("stage", e.target.value)}
-                    className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-white"
+                  )}
+                  <div className="mt-4 whitespace-pre-wrap text-sm leading-6 text-zinc-200">
+                    {selectedMaterial.message}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(selectedMaterial.message)
+                        .then(() => toast.success("Mensagem copiada."))
+                        .catch(() => toast.error("Não foi possível copiar a mensagem."));
+                    }}
+                    className="mt-5 w-full border-zinc-700 bg-zinc-900 text-zinc-200"
                   >
-                    {stages.map((stage) => (
-                      <option key={stage.id} value={stage.id}>
-                        {stage.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-xs text-zinc-400">
-                  Serviço de interesse
-                  <Input
-                    value={String(draft.service_interest ?? "")}
-                    onChange={(e) => field("service_interest", e.target.value)}
-                    className="mt-1 border-zinc-700 bg-zinc-950"
-                  />
-                </label>
-                <label className="block text-xs text-zinc-400">
-                  Próxima ação
-                  <Input
-                    value={String(draft.next_action ?? "")}
-                    onChange={(e) => field("next_action", e.target.value)}
-                    className="mt-1 border-zinc-700 bg-zinc-950"
-                  />
-                </label>
-                <label className="block text-xs text-zinc-400">
-                  Data da próxima ação
-                  <Input
-                    type="datetime-local"
-                    value={draft.next_action_at ? String(draft.next_action_at).slice(0, 16) : ""}
-                    onChange={(e) =>
-                      field(
-                        "next_action_at",
-                        e.target.value ? new Date(e.target.value).toISOString() : null,
-                      )
-                    }
-                    className="mt-1 border-zinc-700 bg-zinc-950"
-                  />
-                </label>
-                <label className="block text-xs text-zinc-400">
-                  Anotações
-                  <Textarea
-                    value={String(draft.notes ?? "")}
-                    onChange={(e) => field("notes", e.target.value)}
-                    rows={4}
-                    className="mt-1 border-zinc-700 bg-zinc-950"
-                  />
-                </label>
-              </div>
+                    <Clipboard className="mr-2 h-4 w-4" />
+                    Copiar mensagem
+                  </Button>
+                </aside>
+              )}
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800 pt-4">
-              <Button variant="outline" onClick={onClose} className="border-zinc-700 bg-zinc-900">
-                Fechar
-              </Button>
-              <Button
-                onClick={() =>
-                  onSave({
-                    stage: draft.stage,
-                    service_interest: draft.service_interest,
-                    next_action: draft.next_action,
-                    next_action_at: draft.next_action_at,
-                    instagram_url: draft.instagram_url,
-                    facebook_url: draft.facebook_url,
-                    address_verified: draft.address_verified,
-                    site_quality: draft.site_quality,
-                    instagram_quality: draft.instagram_quality,
-                    paid_traffic_status: draft.paid_traffic_status,
-                    notes: draft.notes,
-                  })
-                }
-                disabled={saving}
-              >
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar
-              </Button>
-              <Button
-                onClick={onSend}
-                disabled={sending}
-                className="bg-emerald-600 hover:bg-emerald-500"
-              >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                {lead.group_sent_at ? "Enviar novamente" : "Enviar no WhatsApp"}
-              </Button>
-            </div>
-            {activities.length > 0 && (
-              <div className="border-t border-zinc-800 pt-4">
-                <h3 className="mb-2 text-sm font-semibold">Histórico</h3>
-                <div className="space-y-2">
-                  {activities.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="flex justify-between gap-4 text-xs text-zinc-400"
-                    >
-                      <span>{activity.description}</span>
-                      <span className="shrink-0">{when(activity.created_at)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </>
         )}
       </DialogContent>

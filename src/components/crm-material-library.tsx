@@ -29,10 +29,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Tables } from "@/integrations/supabase/types";
+import {
+  MATERIAL_FORMAT_BADGE_STYLES,
+  MATERIAL_FORMAT_LABELS,
+  materialFavoritesStorageKey,
+  normalizeMaterialFormat,
+  readFavoriteMaterialIds,
+  type MaterialFormat,
+} from "@/lib/crm-materials";
 
 type Material = Tables<"crm_materials">;
 type AuthorFilter = "all" | "mine" | string;
-type MaterialFormat = "text" | "audio" | "both";
 type FormatFilter = "all" | MaterialFormat;
 
 type Props = {
@@ -40,21 +47,6 @@ type Props = {
   currentUserId: string;
   isAdmin: boolean;
 };
-
-const FORMAT_LABELS: Record<MaterialFormat, string> = {
-  text: "Texto",
-  audio: "Áudio",
-  both: "Áudio e texto",
-};
-
-const FORMAT_BADGE_STYLES: Record<MaterialFormat, string> = {
-  text: "border-blue-500/30 bg-blue-500/10 text-blue-300",
-  audio: "border-violet-500/30 bg-violet-500/10 text-violet-300",
-  both: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-};
-
-const normalizeMaterialFormat = (value: string | null | undefined): MaterialFormat =>
-  value === "audio" || value === "both" ? value : "text";
 
 const normalizeSearch = (value: string) =>
   value
@@ -118,15 +110,9 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const stored = localStorage.getItem("crm-material-favorites:" + currentUserId);
-      return stored ? (JSON.parse(stored) as string[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
+    readFavoriteMaterialIds(currentUserId),
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Material | null>(null);
@@ -227,7 +213,7 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
       const next = current.includes(id)
         ? current.filter((favoriteId) => favoriteId !== id)
         : [...current, id];
-      localStorage.setItem("crm-material-favorites:" + currentUserId, JSON.stringify(next));
+      localStorage.setItem(materialFavoritesStorageKey(currentUserId), JSON.stringify(next));
       return next;
     });
   };
@@ -336,10 +322,10 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 <span
                   className={
                     "pointer-events-none absolute left-2 top-2 rounded-md border px-2 py-1 text-[11px] font-medium " +
-                    FORMAT_BADGE_STYLES[normalizeMaterialFormat(item.content_format)]
+                    MATERIAL_FORMAT_BADGE_STYLES[normalizeMaterialFormat(item.content_format)]
                   }
                 >
-                  {FORMAT_LABELS[normalizeMaterialFormat(item.content_format)]}
+                  {MATERIAL_FORMAT_LABELS[normalizeMaterialFormat(item.content_format)]}
                 </span>
                 <button
                   type="button"
@@ -480,10 +466,10 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
                 <span
                   className={
                     "inline-flex rounded-md border px-2.5 py-1 text-xs font-medium " +
-                    FORMAT_BADGE_STYLES[contentFormat]
+                    MATERIAL_FORMAT_BADGE_STYLES[contentFormat]
                   }
                 >
-                  {FORMAT_LABELS[contentFormat]}
+                  {MATERIAL_FORMAT_LABELS[contentFormat]}
                 </span>
                 {usageContext && (
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3">
