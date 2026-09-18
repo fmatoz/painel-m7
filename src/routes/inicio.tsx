@@ -1,25 +1,34 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
+  Banknote,
+  BookOpenText,
   CalendarDays,
   Check,
+  ChevronDown,
   Cloud,
   CloudAlert,
-  Home,
+  Columns3,
+  Flame,
   LayoutDashboard,
   Loader2,
   LogOut,
   Menu,
   NotebookPen,
   Plus,
+  Rocket,
+  Sparkles,
   Target,
   Trash2,
   TrendingUp,
-  X,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import type { Json } from "@/integrations/supabase/types";
+import type { Json, Tables } from "@/integrations/supabase/types";
 import { Progress } from "@/components/ui/progress";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
@@ -46,6 +55,45 @@ type HomeWorkspace = {
 };
 
 type SaveState = "loading" | "saved" | "saving" | "error";
+type Lead = Tables<"crm_leads">;
+
+type FinanceData = {
+  kpis: {
+    recebido: number;
+    a_receber: number;
+    despesas_pagas: number;
+    caixa_mes: number;
+    receita_recorrente: number;
+    receita_unica: number;
+  };
+};
+
+type WorkflowSummary = {
+  id: string;
+  active: boolean;
+};
+
+const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
+
+async function crmApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch(CRM_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+    cache: "no-store",
+    body: JSON.stringify({ token, ...payload }),
+  });
+  if (!response.ok) throw new Error(`CRM indisponível (${response.status})`);
+  const result = (await response.json()) as { ok?: boolean; data?: T; error?: string };
+  if (!result.ok) throw new Error(result.error || "Não foi possível carregar o CRM.");
+  return result.data as T;
+}
+
+const money = (value: number) =>
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 
 const defaultPriorities: Priority[] = [
   { id: "priority-1", text: "", done: false },
@@ -109,6 +157,71 @@ function InicioComponent() {
   const [isDirty, setIsDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("loading");
   const [loadError, setLoadError] = useState("");
+  const [now, setNow] = useState(() => new Date());
+
+  const canUseCrm = access.can("crm");
+  const canUseFinance = access.can("financeiro");
+  const canUseWorkflows = access.can("workflows");
+  const isAdmin = Boolean(access.profile?.is_admin);
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const leadsQuery = useQuery({
+    queryKey: ["crm-leads"],
+    enabled: Boolean(session && !access.loading && canUseCrm),
+    queryFn: () => crmApi<Lead[]>(session!.access_token, { action: "list" }),
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const financeQuery = useQuery({
+    queryKey: ["finance-dashboard", currentMonth],
+    enabled: Boolean(session && !access.loading && canUseFinance),
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("n8n-workflows", {
+        body: { action: "finance-dashboard", mes: currentMonth },
+      });
+      if (error) throw error;
+      return data as FinanceData;
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const workflowsQuery = useQuery({
+    queryKey: ["n8n-workflows"],
+    enabled: Boolean(session && !access.loading && isAdmin && canUseWorkflows),
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("n8n-workflows", {
+        body: { action: "list" },
+      });
+      if (error) throw error;
+      return ((data.data ?? []) as WorkflowSummary[]) || [];
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: ["home-active-users"],
+    enabled: Boolean(session && !access.loading && isAdmin),
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("app_users")
+        .select("user_id", { count: "exact", head: true })
+        .eq("active", true);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -206,12 +319,82 @@ function InicioComponent() {
     [workspace.priorities],
   );
 
+  const firstName = useMemo(() => {
+    const fullName = access.profile?.full_name?.trim();
+    if (fullName) return fullName.split(/\s+/)[0];
+    const emailName = user?.email?.split("@")[0] || "por aí";
+    return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+  }, [access.profile?.full_name, user?.email]);
+
+  const greeting = now.getHours() < 12 ? "Bom dia" : now.getHours() < 18 ? "Boa tarde" : "Boa noite";
+  const motivationalMessage = useMemo(() => {
+    const salesMessages = [
+      "Vamos vender 3 sites hoje?",
+      "Bora transformar boas conversas em novos clientes?",
+      "Hoje tem oportunidade esperando uma boa abordagem.",
+      "Um contato de cada vez. Vamos fazer acontecer?",
+      "Site, tráfego ou automação: qual solução vamos vender hoje?",
+      "A próxima conversa pode virar um grande cliente.",
+    ];
+    const generalMessages = [
+      "Vamos fazer um dia produtivo?",
+      "Pequenos avanços também constroem grandes resultados.",
+      "Bora tirar as prioridades do papel?",
+      "Hoje é um bom dia para fazer acontecer.",
+    ];
+    const messages = canUseCrm ? salesMessages : generalMessages;
+    const day = Math.floor(now.getTime() / 86_400_000);
+    const period = Math.floor(now.getHours() / 4);
+    return messages[(day + period + firstName.length) % messages.length];
+  }, [canUseCrm, firstName, now]);
+
+  const personalLeads = useMemo(
+    () =>
+      (leadsQuery.data ?? []).filter(
+        (lead) => !lead.assigned_to || lead.assigned_to === user?.id,
+      ),
+    [leadsQuery.data, user?.id],
+  );
+
+  const crmSummary = useMemo(() => {
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
+    const activeStages = new Set(["novo", "primeiro_contato", "respondeu", "follow_up", "reuniao", "proposta"]);
+    const due = personalLeads.filter(
+      (lead) =>
+        lead.next_action_at &&
+        activeStages.has(lead.stage) &&
+        new Date(lead.next_action_at).getTime() <= endOfToday.getTime(),
+    ).length;
+    return {
+      due,
+      newLeads: personalLeads.filter((lead) => lead.stage === "novo").length,
+      conversations: personalLeads.filter((lead) => lead.stage === "respondeu").length,
+      followUps: personalLeads.filter((lead) => lead.stage === "follow_up").length,
+      meetings: personalLeads.filter((lead) => lead.stage === "reuniao").length,
+      proposals: personalLeads.filter((lead) => lead.stage === "proposta").length,
+      clients: personalLeads.filter((lead) => lead.stage === "cliente").length,
+    };
+  }, [now, personalLeads]);
+
+  const globalCrmSummary = useMemo(() => {
+    const leads = leadsQuery.data ?? [];
+    return {
+      total: leads.length,
+      unassigned: leads.filter((lead) => !lead.assigned_to).length,
+      conversations: leads.filter((lead) => lead.stage === "respondeu").length,
+      followUps: leads.filter((lead) => lead.stage === "follow_up").length,
+      proposals: leads.filter((lead) => lead.stage === "proposta").length,
+      clients: leads.filter((lead) => lead.stage === "cliente").length,
+    };
+  }, [leadsQuery.data]);
+
   const today = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     day: "2-digit",
     month: "long",
     timeZone: "America/Sao_Paulo",
-  }).format(new Date());
+  }).format(now);
 
   const addGoal = () => {
     if (workspace.goals.length >= 8) return;
@@ -281,21 +464,34 @@ function InicioComponent() {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-10">
           <div className="mx-auto max-w-6xl space-y-6">
-            <section className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-              <div>
-                <p className="mb-2 flex items-center gap-2 text-sm capitalize text-zinc-500">
-                  <CalendarDays className="h-4 w-4" />
-                  {today}
-                </p>
-                <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-                  Seu ponto de partida
-                </h1>
-                <p className="mt-2 text-zinc-400">
-                  Escolha o essencial e comece sem precisar decidir tudo de uma vez.
-                </p>
-              </div>
-              <div className="rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-400">
-                {completedPriorities} de 3 prioridades concluídas
+            <section className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950 via-zinc-900 to-fuchsia-950/60 p-6 shadow-2xl shadow-blue-950/20 md:p-9">
+              <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-fuchsia-500/10 blur-3xl" />
+              <div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-3xl">
+                  <p className="mb-4 flex items-center gap-2 text-sm capitalize text-blue-200/70">
+                    <CalendarDays className="h-4 w-4" />
+                    {today}
+                  </p>
+                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-amber-300">
+                    <Sparkles className="h-4 w-4" />
+                    Seu ponto de partida
+                  </div>
+                  <h1 className="text-3xl font-bold tracking-tight text-white md:text-5xl">
+                    {greeting}, {firstName}!
+                  </h1>
+                  <p className="mt-3 text-lg text-zinc-300 md:text-xl">{motivationalMessage}</p>
+                </div>
+                {canUseCrm && (
+                  <a
+                    href="/crm"
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-lg shadow-blue-950/40 transition hover:-translate-y-0.5 hover:bg-blue-500"
+                  >
+                    <Rocket className="h-5 w-5" />
+                    Começar pelo CRM
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                )}
               </div>
             </section>
 
@@ -304,6 +500,236 @@ function InicioComponent() {
                 {loadError}
               </div>
             )}
+
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Acesso rápido</h2>
+                  <p className="text-sm text-zinc-500">Só aparece o que você pode acessar.</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {canUseCrm && (
+                  <QuickLink
+                    href="/crm"
+                    icon={<Columns3 />}
+                    title="Abrir CRM"
+                    description="Continue sua prospecção"
+                    accent="blue"
+                  />
+                )}
+                {canUseCrm && (
+                  <QuickLink
+                    href="/materiais"
+                    icon={<BookOpenText />}
+                    title="Materiais"
+                    description="Respostas e textos favoritos"
+                    accent="violet"
+                  />
+                )}
+                {canUseFinance && (
+                  <QuickLink
+                    href="/financeiro"
+                    icon={<TrendingUp />}
+                    title="Financeiro"
+                    description="Acompanhe caixa e recebimentos"
+                    accent="emerald"
+                  />
+                )}
+                {canUseWorkflows && (
+                  <QuickLink
+                    href="/dashboard"
+                    icon={<LayoutDashboard />}
+                    title="Workflows"
+                    description="Veja suas automações"
+                    accent="amber"
+                  />
+                )}
+                {isAdmin && (
+                  <QuickLink
+                    href="/usuarios"
+                    icon={<Users />}
+                    title="Equipe"
+                    description="Usuários e permissões"
+                    accent="pink"
+                  />
+                )}
+              </div>
+            </section>
+
+            {canUseCrm && (
+              <section className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 md:p-6">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Flame className="h-5 w-5 text-orange-400" />
+                      <h2 className="text-lg font-semibold">Minha missão de hoje</h2>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Seus leads e os ainda não atribuídos, sem transformar nota em prioridade.
+                    </p>
+                  </div>
+                  <a
+                    href="/crm"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-blue-400 hover:text-blue-300"
+                  >
+                    Ver pipeline <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+                {leadsQuery.isLoading ? (
+                  <LoadingBlock />
+                ) : leadsQuery.error ? (
+                  <UnavailableBlock label="Não foi possível carregar o resumo do CRM." />
+                ) : (
+                  <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+                    <MetricCard label="Ações para hoje" value={crmSummary.due} tone="orange" />
+                    <MetricCard label="Novos leads" value={crmSummary.newLeads} tone="blue" />
+                    <MetricCard
+                      label="Em conversa"
+                      value={crmSummary.conversations}
+                      tone="cyan"
+                    />
+                    <MetricCard label="Follow-Up" value={crmSummary.followUps} tone="violet" />
+                    <MetricCard label="Reuniões" value={crmSummary.meetings} tone="amber" />
+                    <MetricCard label="Propostas" value={crmSummary.proposals} tone="orange" />
+                    <MetricCard label="Clientes" value={crmSummary.clients} tone="emerald" />
+                  </div>
+                )}
+              </section>
+            )}
+
+            {canUseFinance && (
+              <section className="rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-950/20 to-zinc-900 p-5 md:p-6">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Banknote className="h-5 w-5 text-emerald-400" />
+                      <h2 className="text-lg font-semibold">Resumo financeiro do mês</h2>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Visível somente para quem possui acesso ao Financeiro.
+                    </p>
+                  </div>
+                  <a
+                    href="/financeiro"
+                    className="hidden items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 sm:inline-flex"
+                  >
+                    Abrir financeiro <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+                {financeQuery.isLoading ? (
+                  <LoadingBlock />
+                ) : financeQuery.error ? (
+                  <UnavailableBlock label="Não foi possível carregar o resumo financeiro." />
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <ValueCard
+                      label="Recebido"
+                      value={money(financeQuery.data?.kpis.recebido ?? 0)}
+                      tone="emerald"
+                    />
+                    <ValueCard
+                      label="A receber"
+                      value={money(financeQuery.data?.kpis.a_receber ?? 0)}
+                      tone="blue"
+                    />
+                    <ValueCard
+                      label="Despesas"
+                      value={money(financeQuery.data?.kpis.despesas_pagas ?? 0)}
+                      tone="red"
+                    />
+                    <ValueCard
+                      label="Caixa"
+                      value={money(financeQuery.data?.kpis.caixa_mes ?? 0)}
+                      tone="zinc"
+                    />
+                  </div>
+                )}
+              </section>
+            )}
+
+            {isAdmin && (
+              <section className="rounded-2xl border border-fuchsia-500/20 bg-zinc-900/80 p-5 md:p-6">
+                <div className="mb-5">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-5 w-5 text-fuchsia-400" />
+                    <h2 className="text-lg font-semibold">Visão da operação</h2>
+                    <span className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fuchsia-300">
+                      ADM
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Um panorama geral que aparece somente para administradores.
+                  </p>
+                </div>
+                <div className="grid gap-4 lg:grid-cols-3">
+                  {canUseCrm && (
+                    <OperationCard
+                      title="Pipeline da equipe"
+                      icon={<Columns3 />}
+                      href="/crm"
+                      loading={leadsQuery.isLoading}
+                      rows={[
+                        ["Leads no CRM", globalCrmSummary.total],
+                        ["Sem responsável", globalCrmSummary.unassigned],
+                        ["Em conversa", globalCrmSummary.conversations],
+                        ["Follow-Ups", globalCrmSummary.followUps],
+                        ["Propostas", globalCrmSummary.proposals],
+                        ["Clientes", globalCrmSummary.clients],
+                      ]}
+                    />
+                  )}
+                  <OperationCard
+                    title="Equipe"
+                    icon={<Users />}
+                    href="/usuarios"
+                    loading={usersQuery.isLoading}
+                    rows={[["Usuários ativos", usersQuery.data ?? 0]]}
+                  />
+                  {canUseWorkflows && (
+                    <OperationCard
+                      title="Automações"
+                      icon={<LayoutDashboard />}
+                      href="/dashboard"
+                      loading={workflowsQuery.isLoading}
+                      rows={[
+                        ["Workflows", workflowsQuery.data?.length ?? 0],
+                        [
+                          "Ativos",
+                          workflowsQuery.data?.filter((workflow) => workflow.active).length ?? 0,
+                        ],
+                        [
+                          "Inativos",
+                          workflowsQuery.data?.filter((workflow) => !workflow.active).length ?? 0,
+                        ],
+                      ]}
+                    />
+                  )}
+                </div>
+              </section>
+            )}
+
+            <details className="group rounded-2xl border border-zinc-800 bg-zinc-900/40">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 md:p-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-zinc-800 p-2.5 text-zinc-300">
+                    <NotebookPen className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Meu espaço pessoal</h2>
+                    <p className="text-sm text-zinc-500">
+                      Foco, prioridades, metas e anotações que já estavam aqui.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="hidden text-xs text-zinc-500 sm:block">
+                    {completedPriorities} de 3 prioridades concluídas
+                  </span>
+                  <ChevronDown className="h-5 w-5 text-zinc-500 transition group-open:rotate-180" />
+                </div>
+              </summary>
+              <div className="space-y-6 border-t border-zinc-800 p-5 md:p-6">
 
             <section className="rounded-2xl border border-blue-900/60 bg-gradient-to-br from-blue-950/70 to-zinc-900 p-5 md:p-7">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-300">
@@ -504,9 +930,145 @@ function InicioComponent() {
                 className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm leading-6 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-800"
               />
             </section>
+              </div>
+            </details>
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+type Accent = "blue" | "violet" | "emerald" | "amber" | "pink";
+
+const quickLinkStyles: Record<Accent, string> = {
+  blue: "border-blue-500/20 bg-blue-500/5 text-blue-300 hover:border-blue-500/50",
+  violet: "border-violet-500/20 bg-violet-500/5 text-violet-300 hover:border-violet-500/50",
+  emerald:
+    "border-emerald-500/20 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/50",
+  amber: "border-amber-500/20 bg-amber-500/5 text-amber-300 hover:border-amber-500/50",
+  pink: "border-pink-500/20 bg-pink-500/5 text-pink-300 hover:border-pink-500/50",
+};
+
+function QuickLink({
+  href,
+  icon,
+  title,
+  description,
+  accent,
+}: {
+  href: string;
+  icon: ReactNode;
+  title: string;
+  description: string;
+  accent: Accent;
+}) {
+  return (
+    <a
+      href={href}
+      className={`group flex items-center gap-3 rounded-xl border p-4 transition hover:-translate-y-0.5 ${quickLinkStyles[accent]}`}
+    >
+      <span className="rounded-lg bg-zinc-950/60 p-2.5 [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+      <span className="min-w-0">
+        <span className="block font-semibold text-zinc-100">{title}</span>
+        <span className="block truncate text-xs text-zinc-500">{description}</span>
+      </span>
+      <ArrowRight className="ml-auto h-4 w-4 shrink-0 opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+    </a>
+  );
+}
+
+type MetricTone = "orange" | "blue" | "cyan" | "violet" | "amber" | "emerald";
+
+const metricToneStyles: Record<MetricTone, string> = {
+  orange: "border-orange-500/20 bg-orange-500/5 text-orange-300",
+  blue: "border-blue-500/20 bg-blue-500/5 text-blue-300",
+  cyan: "border-cyan-500/20 bg-cyan-500/5 text-cyan-300",
+  violet: "border-violet-500/20 bg-violet-500/5 text-violet-300",
+  amber: "border-amber-500/20 bg-amber-500/5 text-amber-300",
+  emerald: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300",
+};
+
+function MetricCard({ label, value, tone }: { label: string; value: number; tone: MetricTone }) {
+  return (
+    <div className={`rounded-xl border px-3 py-4 text-center ${metricToneStyles[tone]}`}>
+      <p className="text-2xl font-bold">{value}</p>
+      <p className="mt-1 text-[11px] font-medium text-zinc-400">{label}</p>
+    </div>
+  );
+}
+
+type ValueTone = "emerald" | "blue" | "red" | "zinc";
+
+const valueToneStyles: Record<ValueTone, string> = {
+  emerald: "text-emerald-400",
+  blue: "text-blue-400",
+  red: "text-red-400",
+  zinc: "text-zinc-100",
+};
+
+function ValueCard({ label, value, tone }: { label: string; value: string; tone: ValueTone }) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className={`mt-2 text-xl font-bold ${valueToneStyles[tone]}`}>{value}</p>
+    </div>
+  );
+}
+
+function OperationCard({
+  title,
+  icon,
+  href,
+  loading,
+  rows,
+}: {
+  title: string;
+  icon: ReactNode;
+  href: string;
+  loading: boolean;
+  rows: Array<[string, number]>;
+}) {
+  return (
+    <a
+      href={href}
+      className="group rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 transition hover:border-fuchsia-500/40"
+    >
+      <div className="mb-4 flex items-center gap-2 text-zinc-200">
+        <span className="text-fuchsia-400 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+        <h3 className="font-semibold">{title}</h3>
+        <ArrowRight className="ml-auto h-4 w-4 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-fuchsia-300" />
+      </div>
+      {loading ? (
+        <div className="flex min-h-24 items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-zinc-500">{label}</span>
+              <span className="font-semibold text-zinc-200">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </a>
+  );
+}
+
+function LoadingBlock() {
+  return (
+    <div className="flex min-h-24 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/40">
+      <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+    </div>
+  );
+}
+
+function UnavailableBlock({ label }: { label: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-6 text-center text-sm text-zinc-500">
+      {label}
     </div>
   );
 }
