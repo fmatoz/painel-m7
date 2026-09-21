@@ -17,10 +17,12 @@ import {
   Mail,
   Menu,
   MessageCircle,
+  Moon,
   Phone,
   RefreshCw,
   Search,
   Star,
+  Sun,
   TrendingUp,
   UserCheck,
   UserRound,
@@ -54,6 +56,7 @@ type Activity = Tables<"crm_activities">;
 type Material = Tables<"crm_materials">;
 type Stage = Lead["stage"];
 type WebsiteFilter = "all" | "with" | "without";
+type CrmTheme = "dark" | "light";
 
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
 const CRM_WHATSAPP_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/whatsapp";
@@ -399,10 +402,24 @@ function CrmComponent() {
   const [assignee, setAssignee] = useState("all");
   const [websiteFilter, setWebsiteFilter] = useState<WebsiteFilter>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const [crmTheme, setCrmTheme] = useState<CrmTheme>("dark");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, session, loading, signOut } = useAuth();
   const access = useAppAccess();
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem("crm-theme");
+    if (storedTheme === "light" || storedTheme === "dark") setCrmTheme(storedTheme);
+  }, []);
+
+  const toggleCrmTheme = () => {
+    setCrmTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      localStorage.setItem("crm-theme", next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/login", search: {} as never });
@@ -538,7 +555,11 @@ function CrmComponent() {
     );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-950 text-white">
+    <div
+      className={`flex h-screen overflow-hidden bg-zinc-950 text-white ${
+        crmTheme === "light" ? "crm-light" : ""
+      }`}
+    >
       <AppSidebar active="crm" {...sidebar} />
 
       <main
@@ -555,6 +576,19 @@ function CrmComponent() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleCrmTheme}
+              className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+              aria-label={crmTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+              title={crmTheme === "dark" ? "Tema claro" : "Tema escuro"}
+            >
+              {crmTheme === "dark" ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+            </button>
             <span className="hidden text-xs text-zinc-500 md:block">{user?.email}</span>
             <button
               onClick={() => signOut()}
@@ -709,6 +743,7 @@ function CrmComponent() {
         isAdmin={Boolean(access.profile?.is_admin)}
         onAssign={(mode) => selected && assignLead.mutate({ id: selected.id, mode })}
         accessToken={session.access_token}
+        theme={crmTheme}
       />
     </div>
   );
@@ -884,6 +919,7 @@ function LeadDialog({
   isAdmin,
   onAssign,
   accessToken,
+  theme,
 }: {
   lead: Lead | null;
   onClose: () => void;
@@ -896,6 +932,7 @@ function LeadDialog({
   isAdmin: boolean;
   onAssign: (mode: "claim" | "release" | "takeover") => void;
   accessToken: string;
+  theme: CrmTheme;
 }) {
   const [draft, setDraft] = useState<Partial<Lead>>({});
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -931,7 +968,7 @@ function LeadDialog({
       <DialogContent
         className={`max-h-[92vh] overflow-y-auto border-zinc-700 bg-zinc-900 text-white ${
           selectedMaterial ? "sm:max-w-6xl" : "sm:max-w-3xl"
-        }`}
+        } ${theme === "light" ? "crm-light" : ""}`}
       >
         {lead && (
           <>
