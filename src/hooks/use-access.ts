@@ -46,6 +46,7 @@ export function useAppAccess() {
           active: true,
           created_at: user.created_at,
           updated_at: new Date().toISOString(),
+          whatsapp_destination: "",
         }
       : null;
   const profile = ownerProfile ?? query.data ?? null;

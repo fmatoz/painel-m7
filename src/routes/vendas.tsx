@@ -55,6 +55,14 @@ const money = (value: number) =>
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+  return fallback;
+}
+
 const parseMoneyInput = (value: string) => {
   const cleaned = value.trim().replace(/[^\d,.-]/g, "");
   return Number(cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned);
@@ -128,7 +136,12 @@ function SalesComponent() {
     mutationFn: async () => {
       const parsedValue = parseMoneyInput(saleValue);
       const selectedService = service === "Outro" ? customService.trim() : service;
-      if (!clientName.trim() || !selectedService || !Number.isFinite(parsedValue) || parsedValue <= 0) {
+      if (
+        !clientName.trim() ||
+        !selectedService ||
+        !Number.isFinite(parsedValue) ||
+        parsedValue <= 0
+      ) {
         throw new Error("Preencha cliente, serviço e valor corretamente.");
       }
       const { data, error } = await supabase
@@ -156,8 +169,7 @@ function SalesComponent() {
         `Venda registrada com ${Number(sale.commission_rate).toLocaleString("pt-BR")}% de comissão.`,
       );
     },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Não foi possível registrar a venda."),
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível registrar a venda.")),
   });
 
   const updateStatus = useMutation({
@@ -169,7 +181,7 @@ function SalesComponent() {
       queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
       toast.success("Situação da venda atualizada.");
     },
-    onError: () => toast.error("Não foi possível atualizar a venda."),
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível atualizar a venda.")),
   });
 
   const deleteSale = useMutation({
@@ -181,7 +193,7 @@ function SalesComponent() {
       queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
       toast.success("Venda excluída.");
     },
-    onError: () => toast.error("Não foi possível excluir a venda."),
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível excluir a venda.")),
   });
 
   const summary = useMemo(() => {
@@ -241,13 +253,17 @@ function SalesComponent() {
           <div className="mx-auto max-w-7xl space-y-6">
             <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
               <div>
-                <h2 className="text-2xl font-bold">{isAdmin ? "Vendas da equipe" : "Minhas vendas"}</h2>
+                <h2 className="text-2xl font-bold">
+                  {isAdmin ? "Vendas da equipe" : "Minhas vendas"}
+                </h2>
                 <p className="mt-1 text-sm text-zinc-400">
                   A porcentagem é gravada no momento do cadastro e não muda depois.
                 </p>
               </div>
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-emerald-300/70">Comissão vigente</p>
+                <p className="text-xs uppercase tracking-wide text-emerald-300/70">
+                  Comissão vigente
+                </p>
                 <p className="text-2xl font-bold text-emerald-300">
                   {settingsQuery.isLoading
                     ? "—"
@@ -257,15 +273,27 @@ function SalesComponent() {
             </section>
 
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <SummaryCard label="Total vendido" value={money(summary.sold)} icon={<WalletCards />} />
+              <SummaryCard
+                label="Total vendido"
+                value={money(summary.sold)}
+                icon={<WalletCards />}
+              />
               <SummaryCard
                 label="Comissão confirmada"
                 value={money(summary.commission)}
                 icon={<BadgeDollarSign />}
               />
               <SummaryCard label="A receber" value={money(summary.receivable)} icon={<Clock3 />} />
-              <SummaryCard label="Comissão paga" value={money(summary.paid)} icon={<CheckCircle2 />} />
-              <SummaryCard label="Aguardando aprovação" value={String(summary.pending)} icon={<CalendarDays />} />
+              <SummaryCard
+                label="Comissão paga"
+                value={money(summary.paid)}
+                icon={<CheckCircle2 />}
+              />
+              <SummaryCard
+                label="Aguardando aprovação"
+                value={String(summary.pending)}
+                icon={<CalendarDays />}
+              />
             </section>
 
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
@@ -359,7 +387,9 @@ function SalesComponent() {
               <div className="mb-5">
                 <h2 className="text-lg font-semibold">Histórico</h2>
                 <p className="mt-1 text-sm text-zinc-500">
-                  {isAdmin ? "Aprove e acompanhe as vendas de toda a equipe." : "Acompanhe a validação das suas vendas."}
+                  {isAdmin
+                    ? "Aprove e acompanhe as vendas de toda a equipe."
+                    : "Acompanhe a validação das suas vendas."}
                 </p>
               </div>
               {salesQuery.isLoading ? (
@@ -368,7 +398,7 @@ function SalesComponent() {
                 </div>
               ) : salesQuery.error ? (
                 <div className="rounded-xl border border-red-900 bg-red-950/30 p-6 text-center text-red-300">
-                  Não foi possível carregar as vendas.
+                  {errorMessage(salesQuery.error, "Não foi possível carregar as vendas.")}
                 </div>
               ) : (salesQuery.data ?? []).length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-zinc-500">
@@ -378,7 +408,8 @@ function SalesComponent() {
                 <div className="space-y-3">
                   {(salesQuery.data ?? []).map((sale) => {
                     const status = sale.status as SaleStatus;
-                    const canDelete = isAdmin || (sale.seller_id === user.id && status === "pending");
+                    const canDelete =
+                      isAdmin || (sale.seller_id === user.id && status === "pending");
                     return (
                       <article
                         key={sale.id}
@@ -388,7 +419,9 @@ function SalesComponent() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="font-semibold text-zinc-100">{sale.client_name}</h3>
-                              <span className={`rounded-md border px-2 py-0.5 text-[11px] ${statusStyles[status]}`}>
+                              <span
+                                className={`rounded-md border px-2 py-0.5 text-[11px] ${statusStyles[status]}`}
+                              >
                                 {statusLabels[status]}
                               </span>
                             </div>
@@ -396,17 +429,28 @@ function SalesComponent() {
                               {isAdmin && <span>Vendedor: {sale.seller_name}</span>}
                               <span>{sale.service}</span>
                               <span>{formatDate(sale.sale_date)}</span>
-                              <span>Taxa registrada: {Number(sale.commission_rate).toLocaleString("pt-BR")}%</span>
+                              <span>
+                                Taxa registrada:{" "}
+                                {Number(sale.commission_rate).toLocaleString("pt-BR")}%
+                              </span>
                             </div>
-                            {sale.notes && <p className="mt-2 text-sm text-zinc-400">{sale.notes}</p>}
+                            {sale.notes && (
+                              <p className="mt-2 text-sm text-zinc-400">{sale.notes}</p>
+                            )}
                           </div>
                           <div className="grid shrink-0 grid-cols-2 gap-4 text-right">
                             <div>
-                              <p className="text-[10px] uppercase tracking-wide text-zinc-500">Venda</p>
-                              <p className="font-semibold text-zinc-200">{money(Number(sale.sale_value))}</p>
+                              <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                                Venda
+                              </p>
+                              <p className="font-semibold text-zinc-200">
+                                {money(Number(sale.sale_value))}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-[10px] uppercase tracking-wide text-zinc-500">Comissão</p>
+                              <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                                Comissão
+                              </p>
                               <p className="font-semibold text-emerald-400">
                                 {money(Number(sale.commission_value))}
                               </p>
@@ -416,7 +460,9 @@ function SalesComponent() {
                             {isAdmin && status !== "approved" && status !== "paid" && (
                               <Button
                                 size="sm"
-                                onClick={() => updateStatus.mutate({ id: sale.id, status: "approved" })}
+                                onClick={() =>
+                                  updateStatus.mutate({ id: sale.id, status: "approved" })
+                                }
                                 disabled={updateStatus.isPending}
                                 className="bg-blue-600 hover:bg-blue-500"
                               >
@@ -437,7 +483,9 @@ function SalesComponent() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => updateStatus.mutate({ id: sale.id, status: "rejected" })}
+                                onClick={() =>
+                                  updateStatus.mutate({ id: sale.id, status: "rejected" })
+                                }
                                 disabled={updateStatus.isPending}
                                 className="border-red-800 text-red-300"
                               >

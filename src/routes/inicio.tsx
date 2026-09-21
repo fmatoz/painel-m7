@@ -102,6 +102,14 @@ const money = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+  return fallback;
+}
+
 const defaultPriorities: Priority[] = [
   { id: "priority-1", text: "", done: false },
   { id: "priority-2", text: "", done: false },
@@ -281,8 +289,7 @@ function InicioComponent() {
       queryClient.invalidateQueries({ queryKey: ["team-settings"] });
       toast.success("Aviso e comissão atualizados para a equipe.");
     },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar."),
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar.")),
   });
 
   useEffect(() => {
@@ -388,7 +395,8 @@ function InicioComponent() {
     return emailName.charAt(0).toUpperCase() + emailName.slice(1);
   }, [access.profile?.full_name, user?.email]);
 
-  const greeting = now.getHours() < 12 ? "Bom dia" : now.getHours() < 18 ? "Boa tarde" : "Boa noite";
+  const greeting =
+    now.getHours() < 12 ? "Bom dia" : now.getHours() < 18 ? "Boa tarde" : "Boa noite";
   const motivationalMessage = useMemo(() => {
     const salesMessages = [
       "Vamos vender 3 sites hoje?",
@@ -412,16 +420,21 @@ function InicioComponent() {
 
   const personalLeads = useMemo(
     () =>
-      (leadsQuery.data ?? []).filter(
-        (lead) => !lead.assigned_to || lead.assigned_to === user?.id,
-      ),
+      (leadsQuery.data ?? []).filter((lead) => !lead.assigned_to || lead.assigned_to === user?.id),
     [leadsQuery.data, user?.id],
   );
 
   const crmSummary = useMemo(() => {
     const endOfToday = new Date(now);
     endOfToday.setHours(23, 59, 59, 999);
-    const activeStages = new Set(["novo", "primeiro_contato", "respondeu", "follow_up", "reuniao", "proposta"]);
+    const activeStages = new Set([
+      "novo",
+      "primeiro_contato",
+      "respondeu",
+      "follow_up",
+      "reuniao",
+      "proposta",
+    ]);
     const due = personalLeads.filter(
       (lead) =>
         lead.next_action_at &&
@@ -563,7 +576,8 @@ function InicioComponent() {
               </div>
             )}
 
-            {(settingsQuery.data?.announcement_title || settingsQuery.data?.announcement_message) && (
+            {(settingsQuery.data?.announcement_title ||
+              settingsQuery.data?.announcement_message) && (
               <section className="rounded-2xl border border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-zinc-900 to-orange-500/5 p-5 md:p-6">
                 <div className="flex items-start gap-4">
                   <div className="rounded-xl bg-amber-500/15 p-3 text-amber-300">
@@ -680,11 +694,7 @@ function InicioComponent() {
                   <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
                     <MetricCard label="Ações para hoje" value={crmSummary.due} tone="orange" />
                     <MetricCard label="Novos leads" value={crmSummary.newLeads} tone="blue" />
-                    <MetricCard
-                      label="Em conversa"
-                      value={crmSummary.conversations}
-                      tone="cyan"
-                    />
+                    <MetricCard label="Em conversa" value={crmSummary.conversations} tone="cyan" />
                     <MetricCard label="Follow-Up" value={crmSummary.followUps} tone="violet" />
                     <MetricCard label="Reuniões" value={crmSummary.meetings} tone="amber" />
                     <MetricCard label="Propostas" value={crmSummary.proposals} tone="orange" />
@@ -752,7 +762,8 @@ function InicioComponent() {
                     <div>
                       <h2 className="font-semibold">Comunicado e comissão</h2>
                       <p className="text-xs text-zinc-500">
-                        O aviso aparece no Início de todos. A nova porcentagem vale somente para vendas cadastradas depois da alteração.
+                        O aviso aparece no Início de todos. A nova porcentagem vale somente para
+                        vendas cadastradas depois da alteração.
                       </p>
                     </div>
                   </div>
@@ -795,7 +806,9 @@ function InicioComponent() {
                       disabled={saveTeamSettings.isPending || settingsQuery.isLoading}
                       className="bg-amber-600 text-white hover:bg-amber-500"
                     >
-                      {saveTeamSettings.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {saveTeamSettings.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
                       Salvar para todos
                     </Button>
                   </div>
@@ -880,206 +893,207 @@ function InicioComponent() {
                 </div>
               </summary>
               <div className="space-y-6 border-t border-zinc-800 p-5 md:p-6">
-
-            <section className="rounded-2xl border border-blue-900/60 bg-gradient-to-br from-blue-950/70 to-zinc-900 p-5 md:p-7">
-              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-300">
-                <Target className="h-4 w-4" />
-                Foco atual
-              </div>
-              <input
-                value={workspace.focusText}
-                maxLength={500}
-                onChange={(event) =>
-                  updateWorkspace((current) => ({ ...current, focusText: event.target.value }))
-                }
-                placeholder="No que vale a pena trabalhar agora?"
-                className="w-full border-0 bg-transparent text-xl font-medium text-white outline-none placeholder:text-zinc-600 md:text-2xl"
-              />
-            </section>
-
-            <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-              <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
-                <div className="mb-5">
-                  <h2 className="text-lg font-semibold">Três prioridades</h2>
-                  <p className="mt-1 text-sm text-zinc-500">Poucas escolhas, com intenção.</p>
-                </div>
-                <div className="space-y-3">
-                  {workspace.priorities.map((priority, index) => (
-                    <div
-                      key={priority.id}
-                      className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"
-                    >
-                      <button
-                        aria-label={`Concluir prioridade ${index + 1}`}
-                        onClick={() =>
-                          updateWorkspace((current) => ({
-                            ...current,
-                            priorities: current.priorities.map((item) =>
-                              item.id === priority.id ? { ...item, done: !item.done } : item,
-                            ),
-                          }))
-                        }
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${priority.done ? "border-emerald-500 bg-emerald-500 text-zinc-950" : "border-zinc-700 bg-zinc-900 text-transparent"}`}
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <span className="w-5 text-xs font-semibold text-zinc-600">{index + 1}</span>
-                      <input
-                        value={priority.text}
-                        maxLength={180}
-                        onChange={(event) =>
-                          updateWorkspace((current) => ({
-                            ...current,
-                            priorities: current.priorities.map((item) =>
-                              item.id === priority.id
-                                ? { ...item, text: event.target.value }
-                                : item,
-                            ),
-                          }))
-                        }
-                        placeholder="Digite uma prioridade"
-                        className={`min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-600 ${priority.done ? "text-zinc-500 line-through" : "text-zinc-200"}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold">Metas</h2>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Acompanhe o avanço sem perder o contexto.
-                    </p>
+                <section className="rounded-2xl border border-blue-900/60 bg-gradient-to-br from-blue-950/70 to-zinc-900 p-5 md:p-7">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-300">
+                    <Target className="h-4 w-4" />
+                    Foco atual
                   </div>
-                  <button
-                    onClick={addGoal}
-                    disabled={workspace.goals.length >= 8}
-                    className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-40"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Nova meta
-                  </button>
-                </div>
+                  <input
+                    value={workspace.focusText}
+                    maxLength={500}
+                    onChange={(event) =>
+                      updateWorkspace((current) => ({ ...current, focusText: event.target.value }))
+                    }
+                    placeholder="No que vale a pena trabalhar agora?"
+                    className="w-full border-0 bg-transparent text-xl font-medium text-white outline-none placeholder:text-zinc-600 md:text-2xl"
+                  />
+                </section>
 
-                {workspace.goals.length === 0 ? (
-                  <button
-                    onClick={addGoal}
-                    className="flex min-h-40 w-full flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-blue-700 hover:text-blue-400"
-                  >
-                    <Target className="mb-3 h-7 w-7" />
-                    <span className="text-sm">Adicione sua primeira meta</span>
-                  </button>
-                ) : (
-                  <div className="space-y-4">
-                    {workspace.goals.map((goal) => (
-                      <div
-                        key={goal.id}
-                        className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
-                      >
-                        <div className="flex items-start gap-3">
+                <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
+                    <div className="mb-5">
+                      <h2 className="text-lg font-semibold">Três prioridades</h2>
+                      <p className="mt-1 text-sm text-zinc-500">Poucas escolhas, com intenção.</p>
+                    </div>
+                    <div className="space-y-3">
+                      {workspace.priorities.map((priority, index) => (
+                        <div
+                          key={priority.id}
+                          className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"
+                        >
+                          <button
+                            aria-label={`Concluir prioridade ${index + 1}`}
+                            onClick={() =>
+                              updateWorkspace((current) => ({
+                                ...current,
+                                priorities: current.priorities.map((item) =>
+                                  item.id === priority.id ? { ...item, done: !item.done } : item,
+                                ),
+                              }))
+                            }
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${priority.done ? "border-emerald-500 bg-emerald-500 text-zinc-950" : "border-zinc-700 bg-zinc-900 text-transparent"}`}
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <span className="w-5 text-xs font-semibold text-zinc-600">
+                            {index + 1}
+                          </span>
                           <input
-                            value={goal.title}
+                            value={priority.text}
                             maxLength={180}
                             onChange={(event) =>
                               updateWorkspace((current) => ({
                                 ...current,
-                                goals: current.goals.map((item) =>
-                                  item.id === goal.id
-                                    ? { ...item, title: event.target.value }
+                                priorities: current.priorities.map((item) =>
+                                  item.id === priority.id
+                                    ? { ...item, text: event.target.value }
                                     : item,
                                 ),
                               }))
                             }
-                            placeholder="Nome da meta"
-                            className="min-w-0 flex-1 bg-transparent font-medium text-zinc-100 outline-none placeholder:text-zinc-600"
+                            placeholder="Digite uma prioridade"
+                            className={`min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-600 ${priority.done ? "text-zinc-500 line-through" : "text-zinc-200"}`}
                           />
-                          <button
-                            aria-label="Excluir meta"
-                            onClick={() =>
-                              updateWorkspace((current) => ({
-                                ...current,
-                                goals: current.goals.filter((item) => item.id !== goal.id),
-                              }))
-                            }
-                            className="p-1 text-zinc-600 hover:text-red-400"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
                         </div>
-                        <div className="mt-4 flex items-center gap-3">
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="5"
-                            value={goal.progress}
-                            onChange={(event) =>
-                              updateWorkspace((current) => ({
-                                ...current,
-                                goals: current.goals.map((item) =>
-                                  item.id === goal.id
-                                    ? { ...item, progress: Number(event.target.value) }
-                                    : item,
-                                ),
-                              }))
-                            }
-                            className="h-2 min-w-0 flex-1 cursor-pointer accent-blue-500"
-                          />
-                          <span className="w-10 text-right text-xs font-medium text-blue-400">
-                            {goal.progress}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={goal.progress}
-                          className="mt-3 bg-zinc-800"
-                          indicatorClassName="bg-gradient-to-r from-fuchsia-500 to-blue-500"
-                        />
-                        <label className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
-                          <CalendarDays className="h-4 w-4" />
-                          Prazo
-                          <input
-                            type="date"
-                            value={goal.dueDate}
-                            onChange={(event) =>
-                              updateWorkspace((current) => ({
-                                ...current,
-                                goals: current.goals.map((item) =>
-                                  item.id === goal.id
-                                    ? { ...item, dueDate: event.target.value }
-                                    : item,
-                                ),
-                              }))
-                            }
-                            className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-zinc-300 outline-none"
-                          />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            </div>
+                      ))}
+                    </div>
+                  </section>
 
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
-              <div className="mb-4 flex items-center gap-2">
-                <NotebookPen className="h-5 w-5 text-fuchsia-400" />
-                <div>
-                  <h2 className="text-lg font-semibold">Anotações rápidas</h2>
-                  <p className="text-sm text-zinc-500">Tire da cabeça antes que se perca.</p>
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
+                    <div className="mb-5 flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-lg font-semibold">Metas</h2>
+                        <p className="mt-1 text-sm text-zinc-500">
+                          Acompanhe o avanço sem perder o contexto.
+                        </p>
+                      </div>
+                      <button
+                        onClick={addGoal}
+                        disabled={workspace.goals.length >= 8}
+                        className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-40"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Nova meta
+                      </button>
+                    </div>
+
+                    {workspace.goals.length === 0 ? (
+                      <button
+                        onClick={addGoal}
+                        className="flex min-h-40 w-full flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-blue-700 hover:text-blue-400"
+                      >
+                        <Target className="mb-3 h-7 w-7" />
+                        <span className="text-sm">Adicione sua primeira meta</span>
+                      </button>
+                    ) : (
+                      <div className="space-y-4">
+                        {workspace.goals.map((goal) => (
+                          <div
+                            key={goal.id}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
+                          >
+                            <div className="flex items-start gap-3">
+                              <input
+                                value={goal.title}
+                                maxLength={180}
+                                onChange={(event) =>
+                                  updateWorkspace((current) => ({
+                                    ...current,
+                                    goals: current.goals.map((item) =>
+                                      item.id === goal.id
+                                        ? { ...item, title: event.target.value }
+                                        : item,
+                                    ),
+                                  }))
+                                }
+                                placeholder="Nome da meta"
+                                className="min-w-0 flex-1 bg-transparent font-medium text-zinc-100 outline-none placeholder:text-zinc-600"
+                              />
+                              <button
+                                aria-label="Excluir meta"
+                                onClick={() =>
+                                  updateWorkspace((current) => ({
+                                    ...current,
+                                    goals: current.goals.filter((item) => item.id !== goal.id),
+                                  }))
+                                }
+                                className="p-1 text-zinc-600 hover:text-red-400"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <div className="mt-4 flex items-center gap-3">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="5"
+                                value={goal.progress}
+                                onChange={(event) =>
+                                  updateWorkspace((current) => ({
+                                    ...current,
+                                    goals: current.goals.map((item) =>
+                                      item.id === goal.id
+                                        ? { ...item, progress: Number(event.target.value) }
+                                        : item,
+                                    ),
+                                  }))
+                                }
+                                className="h-2 min-w-0 flex-1 cursor-pointer accent-blue-500"
+                              />
+                              <span className="w-10 text-right text-xs font-medium text-blue-400">
+                                {goal.progress}%
+                              </span>
+                            </div>
+                            <Progress
+                              value={goal.progress}
+                              className="mt-3 bg-zinc-800"
+                              indicatorClassName="bg-gradient-to-r from-fuchsia-500 to-blue-500"
+                            />
+                            <label className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+                              <CalendarDays className="h-4 w-4" />
+                              Prazo
+                              <input
+                                type="date"
+                                value={goal.dueDate}
+                                onChange={(event) =>
+                                  updateWorkspace((current) => ({
+                                    ...current,
+                                    goals: current.goals.map((item) =>
+                                      item.id === goal.id
+                                        ? { ...item, dueDate: event.target.value }
+                                        : item,
+                                    ),
+                                  }))
+                                }
+                                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-zinc-300 outline-none"
+                              />
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
                 </div>
-              </div>
-              <textarea
-                value={workspace.notes}
-                maxLength={20000}
-                onChange={(event) =>
-                  updateWorkspace((current) => ({ ...current, notes: event.target.value }))
-                }
-                placeholder="Ideias, lembretes, decisões e qualquer coisa que você precise reencontrar depois..."
-                className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm leading-6 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-800"
-              />
-            </section>
+
+                <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
+                  <div className="mb-4 flex items-center gap-2">
+                    <NotebookPen className="h-5 w-5 text-fuchsia-400" />
+                    <div>
+                      <h2 className="text-lg font-semibold">Anotações rápidas</h2>
+                      <p className="text-sm text-zinc-500">Tire da cabeça antes que se perca.</p>
+                    </div>
+                  </div>
+                  <textarea
+                    value={workspace.notes}
+                    maxLength={20000}
+                    onChange={(event) =>
+                      updateWorkspace((current) => ({ ...current, notes: event.target.value }))
+                    }
+                    placeholder="Ideias, lembretes, decisões e qualquer coisa que você precise reencontrar depois..."
+                    className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm leading-6 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-800"
+                  />
+                </section>
               </div>
             </details>
           </div>
@@ -1094,8 +1108,7 @@ type Accent = "blue" | "violet" | "emerald" | "amber" | "pink";
 const quickLinkStyles: Record<Accent, string> = {
   blue: "border-blue-500/20 bg-blue-500/5 text-blue-300 hover:border-blue-500/50",
   violet: "border-violet-500/20 bg-violet-500/5 text-violet-300 hover:border-violet-500/50",
-  emerald:
-    "border-emerald-500/20 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/50",
+  emerald: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/50",
   amber: "border-amber-500/20 bg-amber-500/5 text-amber-300 hover:border-amber-500/50",
   pink: "border-pink-500/20 bg-pink-500/5 text-pink-300 hover:border-pink-500/50",
 };
