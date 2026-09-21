@@ -124,7 +124,8 @@ export function CrmMaterialLibrary({ accessToken, currentUserId, isAdmin }: Prop
   const materialsQuery = useQuery({
     queryKey: ["crm-materials"],
     queryFn: () => materialsApi<Material[]>(accessToken, { action: "material-list" }),
-    refetchInterval: 10_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 

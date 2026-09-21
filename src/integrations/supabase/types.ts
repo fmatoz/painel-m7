@@ -437,7 +437,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      claim_crm_lead: {
+        Args: { p_lead_id: string };
+        Returns: Database["public"]["Tables"]["crm_leads"]["Row"];
+      };
     };
     Enums: {
       [_ in never]: never;

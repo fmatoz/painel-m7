@@ -42,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
 import { useAppAccess } from "@/hooks/use-access";
+import { supabase } from "@/integrations/supabase/client";
 import {
   MATERIAL_FORMAT_BADGE_STYLES,
   MATERIAL_FORMAT_LABELS,
@@ -417,10 +418,40 @@ function CrmComponent() {
     queryKey: ["crm-leads"],
     enabled: !!session,
     queryFn: () => crmApi<Lead[]>(session!.access_token, { action: "list" }),
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: true,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!session) return;
+
+    const channel = supabase
+      .channel(`crm-leads-${user?.id ?? "user"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_leads" }, (payload) => {
+        queryClient.setQueryData<Lead[]>(["crm-leads"], (current) => {
+          if (!current) return current;
+
+          if (payload.eventType === "DELETE") {
+            const removedId = (payload.old as { id?: string }).id;
+            return removedId ? current.filter((lead) => lead.id !== removedId) : current;
+          }
+
+          const changedLead = payload.new as Lead;
+          const existingIndex = current.findIndex((lead) => lead.id === changedLead.id);
+          if (existingIndex === -1) return [changedLead, ...current];
+
+          const next = [...current];
+          next[existingIndex] = changedLead;
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, session, user?.id]);
 
   useEffect(() => {
     if (!selected || !leadsQuery.data) return;
@@ -451,8 +482,19 @@ function CrmComponent() {
   });
 
   const assignLead = useMutation({
-    mutationFn: async ({ id, mode }: { id: string; mode: "claim" | "release" | "takeover" }) =>
-      crmApi<Lead>(session!.access_token, { action: "assign", leadId: id, assignmentMode: mode }),
+    mutationFn: async ({ id, mode }: { id: string; mode: "claim" | "release" | "takeover" }) => {
+      if (mode !== "claim") {
+        return crmApi<Lead>(session!.access_token, {
+          action: "assign",
+          leadId: id,
+          assignmentMode: mode,
+        });
+      }
+
+      const { data, error } = await supabase.rpc("claim_crm_lead", { p_lead_id: id });
+      if (error) throw error;
+      return data as Lead;
+    },
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       setSelected((current) => (current?.id === lead.id ? lead : current));
