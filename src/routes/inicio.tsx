@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
+  BadgeDollarSign,
   Banknote,
   BookOpenText,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
   Loader2,
   LogOut,
   Menu,
+  Megaphone,
   NotebookPen,
   Plus,
   Rocket,
@@ -26,6 +28,7 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json, Tables } from "@/integrations/supabase/types";
@@ -33,6 +36,9 @@ import { Progress } from "@/components/ui/progress";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
 import { useAppAccess } from "@/hooks/use-access";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type Priority = {
   id: string;
@@ -56,6 +62,7 @@ type HomeWorkspace = {
 
 type SaveState = "loading" | "saved" | "saving" | "error";
 type Lead = Tables<"crm_leads">;
+type TeamSettings = Tables<"team_settings">;
 
 type FinanceData = {
   kpis: {
@@ -150,6 +157,7 @@ function normalizeGoals(value: Json): Goal[] {
 
 function InicioComponent() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, session, loading: authLoading, signOut } = useAuth();
   const sidebar = useAppSidebar();
   const access = useAppAccess();
@@ -158,12 +166,32 @@ function InicioComponent() {
   const [saveState, setSaveState] = useState<SaveState>("loading");
   const [loadError, setLoadError] = useState("");
   const [now, setNow] = useState(() => new Date());
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [commissionRate, setCommissionRate] = useState("15");
 
   const canUseCrm = access.can("crm");
   const canUseFinance = access.can("financeiro");
   const canUseWorkflows = access.can("workflows");
   const isAdmin = Boolean(access.profile?.is_admin);
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const settingsQuery = useQuery({
+    queryKey: ["team-settings"],
+    enabled: Boolean(session && !access.loading && access.can("inicio")),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_settings")
+        .select("*")
+        .eq("id", "global")
+        .single();
+      if (error) throw error;
+      return data as TeamSettings;
+    },
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
 
   const leadsQuery = useQuery({
     queryKey: ["crm-leads"],
@@ -222,6 +250,40 @@ function InicioComponent() {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!settingsQuery.data) return;
+    setAnnouncementTitle(settingsQuery.data.announcement_title ?? "");
+    setAnnouncementMessage(settingsQuery.data.announcement_message ?? "");
+    setCommissionRate(String(settingsQuery.data.commission_rate ?? 15));
+  }, [settingsQuery.data]);
+
+  const saveTeamSettings = useMutation({
+    mutationFn: async () => {
+      const rate = Number(commissionRate.replace(",", "."));
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        throw new Error("Informe uma comissão entre 0% e 100%.");
+      }
+      const { error } = await supabase.from("team_settings").upsert(
+        {
+          id: "global",
+          announcement_title: announcementTitle.trim(),
+          announcement_message: announcementMessage.trim(),
+          commission_rate: rate,
+          updated_by: user?.id ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-settings"] });
+      toast.success("Aviso e comissão atualizados para a equipe.");
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar."),
+  });
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -501,6 +563,31 @@ function InicioComponent() {
               </div>
             )}
 
+            {(settingsQuery.data?.announcement_title || settingsQuery.data?.announcement_message) && (
+              <section className="rounded-2xl border border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-zinc-900 to-orange-500/5 p-5 md:p-6">
+                <div className="flex items-start gap-4">
+                  <div className="rounded-xl bg-amber-500/15 p-3 text-amber-300">
+                    <Megaphone className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-400/70">
+                      Aviso da equipe
+                    </p>
+                    {settingsQuery.data.announcement_title && (
+                      <h2 className="mt-1 text-lg font-bold text-zinc-100">
+                        {settingsQuery.data.announcement_title}
+                      </h2>
+                    )}
+                    {settingsQuery.data.announcement_message && (
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                        {settingsQuery.data.announcement_message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
             <section>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
@@ -525,6 +612,15 @@ function InicioComponent() {
                     title="Materiais"
                     description="Respostas e textos favoritos"
                     accent="violet"
+                  />
+                )}
+                {canUseCrm && (
+                  <QuickLink
+                    href="/vendas"
+                    icon={<BadgeDollarSign />}
+                    title="Vendas e comissões"
+                    description="Registre vendas e acompanhe ganhos"
+                    accent="emerald"
                   />
                 )}
                 {canUseFinance && (
@@ -650,6 +746,60 @@ function InicioComponent() {
 
             {isAdmin && (
               <section className="rounded-2xl border border-fuchsia-500/20 bg-zinc-900/80 p-5 md:p-6">
+                <div className="mb-6 rounded-xl border border-amber-500/20 bg-zinc-950/60 p-4 md:p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Megaphone className="h-5 w-5 text-amber-400" />
+                    <div>
+                      <h2 className="font-semibold">Comunicado e comissão</h2>
+                      <p className="text-xs text-zinc-500">
+                        O aviso aparece no Início de todos. A nova porcentagem vale somente para vendas cadastradas depois da alteração.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-[1fr_180px]">
+                    <label className="text-xs text-zinc-400">
+                      Título do aviso
+                      <Input
+                        value={announcementTitle}
+                        onChange={(event) => setAnnouncementTitle(event.target.value)}
+                        maxLength={120}
+                        placeholder="Ex.: Comissão especial hoje"
+                        className="mt-1 border-zinc-700 bg-zinc-950"
+                      />
+                    </label>
+                    <label className="text-xs text-zinc-400">
+                      Comissão vigente (%)
+                      <Input
+                        value={commissionRate}
+                        onChange={(event) => setCommissionRate(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="15"
+                        className="mt-1 border-zinc-700 bg-zinc-950"
+                      />
+                    </label>
+                  </div>
+                  <label className="mt-4 block text-xs text-zinc-400">
+                    Mensagem para a equipe
+                    <Textarea
+                      value={announcementMessage}
+                      onChange={(event) => setAnnouncementMessage(event.target.value)}
+                      maxLength={1200}
+                      rows={3}
+                      placeholder="Ex.: Hoje a comissão será de 20%. Vamos vender!"
+                      className="mt-1 border-zinc-700 bg-zinc-950"
+                    />
+                  </label>
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={() => saveTeamSettings.mutate()}
+                      disabled={saveTeamSettings.isPending || settingsQuery.isLoading}
+                      className="bg-amber-600 text-white hover:bg-amber-500"
+                    >
+                      {saveTeamSettings.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Salvar para todos
+                    </Button>
+                  </div>
+                </div>
                 <div className="mb-5">
                   <div className="flex items-center gap-2">
                     <UserCheck className="h-5 w-5 text-fuchsia-400" />

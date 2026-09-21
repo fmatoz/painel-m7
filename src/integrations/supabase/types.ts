@@ -306,6 +306,87 @@ export type Database = {
         };
         Relationships: [];
       };
+      sdr_sales: {
+        Row: {
+          client_name: string;
+          commission_rate: number;
+          commission_value: number;
+          created_at: string;
+          id: string;
+          notes: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          sale_date: string;
+          sale_value: number;
+          seller_id: string;
+          seller_name: string;
+          service: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          client_name: string;
+          commission_rate?: number;
+          commission_value?: number;
+          created_at?: string;
+          id?: string;
+          notes?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          sale_date?: string;
+          sale_value: number;
+          seller_id?: string;
+          seller_name?: string;
+          service: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          client_name?: string;
+          commission_rate?: number;
+          commission_value?: number;
+          created_at?: string;
+          id?: string;
+          notes?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          sale_date?: string;
+          sale_value?: number;
+          seller_id?: string;
+          seller_name?: string;
+          service?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      team_settings: {
+        Row: {
+          announcement_message: string;
+          announcement_title: string;
+          commission_rate: number;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          announcement_message?: string;
+          announcement_title?: string;
+          commission_rate?: number;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          announcement_message?: string;
+          announcement_title?: string;
+          commission_rate?: number;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       dashboard_tabs: {
         Row: {
           created_at: string;

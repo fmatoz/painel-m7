@@ -1,4 +1,5 @@
 import {
+  BadgeDollarSign,
   BookOpenText,
   Columns3,
   Home,
@@ -16,7 +17,7 @@ import { useAppAccess } from "@/hooks/use-access";
 import { useAppTheme } from "@/hooks/use-app-theme";
 
 type Props = {
-  active: AccessArea | "materiais";
+  active: AccessArea | "materiais" | "vendas";
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
   collapsed: boolean;
@@ -39,6 +40,13 @@ const items = [
     href: "/materiais",
     label: "Materiais",
     icon: BookOpenText,
+  },
+  {
+    id: "vendas" as const,
+    area: "crm" as const,
+    href: "/vendas",
+    label: "Vendas",
+    icon: BadgeDollarSign,
   },
   {
     id: "financeiro" as const,
