@@ -3,14 +3,17 @@ import {
   Columns3,
   Home,
   LayoutDashboard,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
   TrendingUp,
   Users,
   X,
 } from "lucide-react";
 import type { AccessArea } from "@/hooks/use-access";
 import { useAppAccess } from "@/hooks/use-access";
+import { useAppTheme } from "@/hooks/use-app-theme";
 
 type Props = {
   active: AccessArea | "materiais";
@@ -61,6 +64,7 @@ export function AppSidebar({
   toggleCollapsed,
 }: Props) {
   const { can } = useAppAccess();
+  const { theme, toggleTheme } = useAppTheme();
   return (
     <>
       {mobileOpen && (
@@ -111,18 +115,38 @@ export function AppSidebar({
               );
             })}
         </nav>
-        <button
-          onClick={toggleCollapsed}
-          className="absolute bottom-4 left-1/2 hidden -translate-x-1/2 items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white lg:flex"
-          title={collapsed ? "Expandir menu" : "Recolher menu"}
+        <div
+          className={`absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col gap-1 ${
+            collapsed ? "items-center" : "w-[calc(100%-2rem)]"
+          }`}
         >
-          {collapsed ? (
-            <PanelLeftOpen className="h-5 w-5" />
-          ) : (
-            <PanelLeftClose className="h-5 w-5" />
-          )}
-          {!collapsed && <span>Recolher</span>}
-        </button>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={`flex items-center rounded-lg px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white ${
+              collapsed ? "justify-center" : "gap-2"
+            }`}
+            title={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+            aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+          >
+            {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            {!collapsed && <span>{theme === "dark" ? "Tema claro" : "Tema escuro"}</span>}
+          </button>
+          <button
+            onClick={toggleCollapsed}
+            className={`hidden items-center rounded-lg px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white lg:flex ${
+              collapsed ? "justify-center" : "gap-2"
+            }`}
+            title={collapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+            {!collapsed && <span>Recolher</span>}
+          </button>
+        </div>
       </aside>
     </>
   );

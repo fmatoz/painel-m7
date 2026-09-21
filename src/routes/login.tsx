@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Lock, Mail, Loader2 } from "lucide-react";
+import { Lock, Mail, Loader2, Moon, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useAppTheme } from "@/hooks/use-app-theme";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -28,6 +29,7 @@ function safeNext(next: string | undefined): string | undefined {
 function LoginComponent() {
   const navigate = useNavigate();
   const { session, loading: authLoading } = useAuth();
+  const { theme, toggleTheme } = useAppTheme();
   const search = Route.useSearch();
   const nextTarget = safeNext(search.next);
   const [email, setEmail] = useState("");
@@ -94,7 +96,16 @@ function LoginComponent() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-zinc-950 px-4">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="absolute right-4 top-4 rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+        aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+        title={theme === "dark" ? "Tema claro" : "Tema escuro"}
+      >
+        {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
       <div className="w-full max-w-md space-y-8 rounded-2xl bg-zinc-900 p-8 shadow-2xl border border-zinc-800">
         <div className="flex flex-col items-center space-y-2">
           <div className="w-24 h-24 mb-2">

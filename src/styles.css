@@ -147,91 +147,107 @@
   }
 }
 
-/* Tema claro opcional e isolado do CRM. */
-.crm-light {
+/* Tema claro opcional e compartilhado por toda a plataforma. */
+.app-light {
   color-scheme: light;
   color: #18181b !important;
 }
 
-.crm-light.bg-zinc-950,
-.crm-light.bg-zinc-900 {
-  background-color: #f4f4f5 !important;
-}
-
-.crm-light .bg-zinc-950,
-.crm-light .bg-zinc-950\/80,
-.crm-light .bg-zinc-950\/90 {
+.app-light .bg-zinc-950,
+.app-light .bg-zinc-950\/40,
+.app-light .bg-zinc-950\/60,
+.app-light .bg-zinc-950\/80,
+.app-light .bg-zinc-950\/85,
+.app-light .bg-zinc-950\/90 {
   background-color: #ffffff !important;
 }
 
-.crm-light .bg-zinc-900,
-.crm-light .bg-zinc-900\/60,
-.crm-light .bg-zinc-900\/70 {
+.app-light .bg-zinc-900,
+.app-light .bg-zinc-900\/30,
+.app-light .bg-zinc-900\/40,
+.app-light .bg-zinc-900\/60,
+.app-light .bg-zinc-900\/70,
+.app-light .bg-zinc-900\/80 {
   background-color: #fafafa !important;
 }
 
-.crm-light .bg-zinc-800 {
+.app-light .bg-zinc-800,
+.app-light .bg-zinc-800\/30,
+.app-light .bg-zinc-800\/50 {
   background-color: #f4f4f5 !important;
 }
 
-.crm-light .bg-zinc-700 {
+.app-light .bg-zinc-700 {
   background-color: #e4e4e7 !important;
 }
 
-.crm-light.border-zinc-700,
-.crm-light .border-zinc-700,
-.crm-light .border-zinc-800 {
+.app-light .border-zinc-700,
+.app-light .border-zinc-800,
+.app-light .border-zinc-800\/50 {
   border-color: #d4d4d8 !important;
 }
 
-.crm-light .border-zinc-600 {
+.app-light .border-zinc-600 {
   border-color: #a1a1aa !important;
 }
 
-.crm-light .text-zinc-100 {
+.app-light .text-zinc-100 {
   color: #18181b !important;
 }
 
-.crm-light .text-zinc-200 {
+.app-light .text-zinc-200 {
   color: #27272a !important;
 }
 
-.crm-light .text-zinc-300 {
+.app-light .text-zinc-300 {
   color: #3f3f46 !important;
 }
 
-.crm-light .text-zinc-400 {
+.app-light .text-zinc-400 {
   color: #52525b !important;
 }
 
-.crm-light .text-zinc-500 {
+.app-light .text-zinc-500 {
   color: #71717a !important;
 }
 
-.crm-light .text-zinc-600,
-.crm-light .placeholder\:text-zinc-600::placeholder {
+.app-light .text-zinc-600,
+.app-light .text-zinc-700,
+.app-light .placeholder\:text-zinc-500::placeholder,
+.app-light .placeholder\:text-zinc-600::placeholder {
   color: #a1a1aa !important;
 }
 
-.crm-light input,
-.crm-light textarea,
-.crm-light select {
+.app-light .bg-zinc-950.text-white,
+.app-light .bg-zinc-900.text-white,
+.app-light h1.text-white,
+.app-light h2.text-white,
+.app-light h3.text-white,
+.app-light input.text-white,
+.app-light textarea.text-white,
+.app-light select.text-white {
+  color: #18181b !important;
+}
+
+.app-light input,
+.app-light textarea,
+.app-light select {
   color: #18181b;
 }
 
-.crm-light input::placeholder,
-.crm-light textarea::placeholder {
+.app-light input::placeholder,
+.app-light textarea::placeholder {
   color: #a1a1aa;
 }
 
-.crm-light .hover\:bg-zinc-800:hover {
+.app-light .hover\:bg-zinc-800:hover {
   background-color: #e4e4e7 !important;
 }
 
-.crm-light .hover\:bg-zinc-700:hover {
+.app-light .hover\:bg-zinc-700:hover {
   background-color: #d4d4d8 !important;
 }
 
-.crm-light .hover\:text-white:hover {
+.app-light .hover\:text-white:hover {
   color: #18181b !important;
 }

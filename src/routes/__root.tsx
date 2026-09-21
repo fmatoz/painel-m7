@@ -132,9 +132,21 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('app-theme')||localStorage.getItem('crm-theme');if(t==='light')document.documentElement.classList.add('app-light')}catch(e){}",
+          }}
+        />
         <HeadContent />
       </head>
       <body className="dark">
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(document.documentElement.classList.contains('app-light'))document.body.classList.remove('dark')}catch(e){}",
+          }}
+        />
         {children}
         <Scripts />
       </body>
