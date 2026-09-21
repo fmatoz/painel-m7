@@ -54,6 +54,14 @@ type Lead = Tables<"crm_leads">;
 type Activity = Tables<"crm_activities">;
 type Material = Tables<"crm_materials">;
 type Stage = Lead["stage"];
+
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+  return fallback;
+}
 type WebsiteFilter = "all" | "with" | "without";
 
 const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
@@ -502,10 +510,10 @@ function CrmComponent() {
         lead.assigned_to_name ? `Lead atribuído a ${lead.assigned_to_name}.` : "Lead liberado.",
       );
     },
-    onError: (error) =>
-      toast.error(
-        error instanceof Error ? error.message : "Não foi possível alterar o responsável.",
-      ),
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
+      toast.error(errorMessage(error, "Não foi possível alterar o responsável."));
+    },
   });
 
   const syncLeads = useMutation({
