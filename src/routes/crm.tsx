@@ -499,8 +499,40 @@ function CrmComponent() {
         });
       }
 
-      const { data, error } = await supabase.rpc("claim_crm_lead", { p_lead_id: id });
+      const assigneeName =
+        access.profile?.full_name?.trim() || user?.email?.split("@")[0] || "Usuário";
+      const { data, error } = await supabase
+        .from("crm_leads")
+        .update({
+          assigned_to: user!.id,
+          assigned_to_name: assigneeName,
+          assigned_to_email: user!.email ?? "",
+          assigned_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .is("assigned_to", null)
+        .select("*")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) {
+        const { data: existing } = await supabase
+          .from("crm_leads")
+          .select("assigned_to_name")
+          .eq("id", id)
+          .maybeSingle();
+        throw new Error(
+          `Este lead já foi assumido por ${existing?.assigned_to_name || "outro usuário"}.`,
+        );
+      }
+
+      await supabase.from("crm_activities").insert({
+        lead_id: id,
+        activity_type: "assignment",
+        description: `Lead assumido por ${assigneeName}`,
+        metadata: { assigned_to: user!.id, assigned_to_name: assigneeName },
+        created_by: user!.id,
+      });
+
       return data as Lead;
     },
     onSuccess: (lead) => {
