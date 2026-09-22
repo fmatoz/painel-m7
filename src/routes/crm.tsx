@@ -490,51 +490,12 @@ function CrmComponent() {
   });
 
   const assignLead = useMutation({
-    mutationFn: async ({ id, mode }: { id: string; mode: "claim" | "release" | "takeover" }) => {
-      if (mode !== "claim") {
-        return crmApi<Lead>(session!.access_token, {
-          action: "assign",
-          leadId: id,
-          assignmentMode: mode,
-        });
-      }
-
-      const assigneeName =
-        access.profile?.full_name?.trim() || user?.email?.split("@")[0] || "Usuário";
-      const { data, error } = await supabase
-        .from("crm_leads")
-        .update({
-          assigned_to: user!.id,
-          assigned_to_name: assigneeName,
-          assigned_to_email: user!.email ?? "",
-          assigned_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-        .is("assigned_to", null)
-        .select("*")
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) {
-        const { data: existing } = await supabase
-          .from("crm_leads")
-          .select("assigned_to_name")
-          .eq("id", id)
-          .maybeSingle();
-        throw new Error(
-          `Este lead já foi assumido por ${existing?.assigned_to_name || "outro usuário"}.`,
-        );
-      }
-
-      await supabase.from("crm_activities").insert({
-        lead_id: id,
-        activity_type: "assignment",
-        description: `Lead assumido por ${assigneeName}`,
-        metadata: { assigned_to: user!.id, assigned_to_name: assigneeName },
-        created_by: user!.id,
-      });
-
-      return data as Lead;
-    },
+    mutationFn: async ({ id, mode }: { id: string; mode: "claim" | "release" | "takeover" }) =>
+      crmApi<Lead>(session!.access_token, {
+        action: "assign",
+        leadId: id,
+        assignmentMode: mode,
+      }),
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       setSelected((current) => (current?.id === lead.id ? lead : current));
