@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { salesApi } from "@/lib/sales-api";
 import type { Json, Tables } from "@/integrations/supabase/types";
 import { Progress } from "@/components/ui/progress";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -176,7 +177,8 @@ function InicioComponent() {
   const [now, setNow] = useState(() => new Date());
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
-  const [commissionRate, setCommissionRate] = useState("15");
+  const [commissionRate, setCommissionRate] = useState("");
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
   const canUseCrm = access.can("crm");
   const canUseFinance = access.can("financeiro");
@@ -185,17 +187,9 @@ function InicioComponent() {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   const settingsQuery = useQuery({
-    queryKey: ["team-settings"],
+    queryKey: ["team-settings", user?.id],
     enabled: Boolean(session && !access.loading && access.can("inicio")),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("team_settings")
-        .select("*")
-        .eq("id", "global")
-        .single();
-      if (error) throw error;
-      return data as TeamSettings;
-    },
+    queryFn: () => salesApi<TeamSettings>(session!.access_token, { action: "settings-get" }),
     staleTime: 10_000,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
@@ -260,32 +254,30 @@ function InicioComponent() {
   }, []);
 
   useEffect(() => {
-    if (!settingsQuery.data) return;
+    if (!settingsQuery.data || settingsDirty) return;
     setAnnouncementTitle(settingsQuery.data.announcement_title ?? "");
     setAnnouncementMessage(settingsQuery.data.announcement_message ?? "");
-    setCommissionRate(String(settingsQuery.data.commission_rate ?? 15));
-  }, [settingsQuery.data]);
+    setCommissionRate(String(settingsQuery.data.commission_rate));
+  }, [settingsQuery.data, settingsDirty]);
 
   const saveTeamSettings = useMutation({
     mutationFn: async () => {
       const rate = Number(commissionRate.replace(",", "."));
-      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+      if (!commissionRate.trim() || !Number.isFinite(rate) || rate < 0 || rate > 100) {
         throw new Error("Informe uma comissão entre 0% e 100%.");
       }
-      const { error } = await supabase.from("team_settings").upsert(
-        {
-          id: "global",
+      return salesApi<TeamSettings>(session!.access_token, {
+        action: "settings-update",
+        changes: {
           announcement_title: announcementTitle.trim(),
           announcement_message: announcementMessage.trim(),
           commission_rate: rate,
-          updated_by: user?.id ?? null,
-          updated_at: new Date().toISOString(),
         },
-        { onConflict: "id" },
-      );
-      if (error) throw error;
+      });
     },
-    onSuccess: () => {
+    onSuccess: (settings) => {
+      queryClient.setQueryData(["team-settings", user?.id], settings);
+      setSettingsDirty(false);
       queryClient.invalidateQueries({ queryKey: ["team-settings"] });
       toast.success("Aviso e comissão atualizados para a equipe.");
     },
@@ -772,7 +764,10 @@ function InicioComponent() {
                       Título do aviso
                       <Input
                         value={announcementTitle}
-                        onChange={(event) => setAnnouncementTitle(event.target.value)}
+                        onChange={(event) => {
+                          setSettingsDirty(true);
+                          setAnnouncementTitle(event.target.value);
+                        }}
                         maxLength={120}
                         placeholder="Ex.: Comissão especial hoje"
                         className="mt-1 border-zinc-700 bg-zinc-950"
@@ -782,7 +777,10 @@ function InicioComponent() {
                       Comissão vigente (%)
                       <Input
                         value={commissionRate}
-                        onChange={(event) => setCommissionRate(event.target.value)}
+                        onChange={(event) => {
+                          setSettingsDirty(true);
+                          setCommissionRate(event.target.value);
+                        }}
                         inputMode="decimal"
                         placeholder="15"
                         className="mt-1 border-zinc-700 bg-zinc-950"
@@ -793,17 +791,34 @@ function InicioComponent() {
                     Mensagem para a equipe
                     <Textarea
                       value={announcementMessage}
-                      onChange={(event) => setAnnouncementMessage(event.target.value)}
+                      onChange={(event) => {
+                        setSettingsDirty(true);
+                        setAnnouncementMessage(event.target.value);
+                      }}
                       maxLength={1200}
                       rows={3}
                       placeholder="Ex.: Hoje a comissão será de 20%. Vamos vender!"
                       className="mt-1 border-zinc-700 bg-zinc-950"
                     />
                   </label>
+                  {settingsQuery.isError && (
+                    <div role="alert" className="mt-4 text-sm text-red-300">
+                      Não foi possível carregar o comunicado e a comissão.
+                      <Button
+                        variant="outline"
+                        className="ml-3"
+                        onClick={() => settingsQuery.refetch()}
+                      >
+                        Tentar novamente
+                      </Button>
+                    </div>
+                  )}
                   <div className="mt-4 flex justify-end">
                     <Button
                       onClick={() => saveTeamSettings.mutate()}
-                      disabled={saveTeamSettings.isPending || settingsQuery.isLoading}
+                      disabled={
+                        saveTeamSettings.isPending || !settingsQuery.data || settingsQuery.isError
+                      }
                       className="bg-amber-600 text-white hover:bg-amber-500"
                     >
                       {saveTeamSettings.isPending && (

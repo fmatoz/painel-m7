@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAppAccess } from "@/hooks/use-access";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { salesApi } from "@/lib/sales-api";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Sale = Tables<"sdr_sales">;
@@ -101,33 +101,17 @@ function SalesComponent() {
   }, [access, session]);
 
   const settingsQuery = useQuery({
-    queryKey: ["team-settings"],
+    queryKey: ["team-settings", user?.id],
     enabled: Boolean(session && !access.loading && access.can("crm")),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("team_settings")
-        .select("*")
-        .eq("id", "global")
-        .single();
-      if (error) throw error;
-      return data as TeamSettings;
-    },
+    queryFn: () => salesApi<TeamSettings>(session!.access_token, { action: "settings-get" }),
     staleTime: 10_000,
     refetchOnWindowFocus: true,
   });
 
   const salesQuery = useQuery({
-    queryKey: ["sdr-sales"],
+    queryKey: ["sdr-sales", user?.id],
     enabled: Boolean(session && !access.loading && access.can("crm")),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sdr_sales")
-        .select("*")
-        .order("sale_date", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Sale[];
-    },
+    queryFn: () => salesApi<Sale[]>(session!.access_token, { action: "sales-list" }),
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
@@ -144,19 +128,16 @@ function SalesComponent() {
       ) {
         throw new Error("Preencha cliente, serviço e valor corretamente.");
       }
-      const { data, error } = await supabase
-        .from("sdr_sales")
-        .insert({
+      return salesApi<Sale>(session!.access_token, {
+        action: "sale-create",
+        changes: {
           client_name: clientName.trim(),
           service: selectedService,
           sale_value: parsedValue,
           sale_date: saleDate,
           notes: notes.trim(),
-        })
-        .select("*")
-        .single();
-      if (error) throw error;
-      return data as Sale;
+        },
+      });
     },
     onSuccess: (sale) => {
       queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
@@ -174,8 +155,11 @@ function SalesComponent() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: SaleStatus }) => {
-      const { error } = await supabase.from("sdr_sales").update({ status }).eq("id", id);
-      if (error) throw error;
+      return salesApi<Sale>(session!.access_token, {
+        action: "sale-status",
+        saleId: id,
+        changes: { status },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
@@ -186,8 +170,7 @@ function SalesComponent() {
 
   const deleteSale = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("sdr_sales").delete().eq("id", id);
-      if (error) throw error;
+      return salesApi<{ id: string }>(session!.access_token, { action: "sale-delete", saleId: id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
@@ -265,12 +248,25 @@ function SalesComponent() {
                   Comissão vigente
                 </p>
                 <p className="text-2xl font-bold text-emerald-300">
-                  {settingsQuery.isLoading
-                    ? "—"
-                    : `${Number(settingsQuery.data?.commission_rate ?? 15).toLocaleString("pt-BR")}%`}
+                  {settingsQuery.data && !settingsQuery.isError
+                    ? `${Number(settingsQuery.data.commission_rate).toLocaleString("pt-BR")}%`
+                    : "—"}
                 </p>
               </div>
             </section>
+
+            {settingsQuery.isError && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300"
+              >
+                Não foi possível consultar a comissão vigente. Nenhuma porcentagem padrão será
+                aplicada.
+                <Button variant="outline" className="ml-3" onClick={() => settingsQuery.refetch()}>
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
 
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <SummaryCard
@@ -370,7 +366,7 @@ function SalesComponent() {
               <div className="mt-5 flex justify-end">
                 <Button
                   onClick={() => createSale.mutate()}
-                  disabled={createSale.isPending || settingsQuery.isLoading}
+                  disabled={createSale.isPending || !settingsQuery.data || settingsQuery.isError}
                   className="bg-emerald-600 hover:bg-emerald-500"
                 >
                   {createSale.isPending ? (
