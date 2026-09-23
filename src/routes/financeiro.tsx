@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { financialFunctionError } from "@/lib/finance-error";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -281,7 +282,10 @@ function FinanceiroComponent() {
       const { data, error } = await supabase.functions.invoke("n8n-workflows", {
         body: { action: "finance-delete", lancamento: { id } },
       });
-      if (error) throw error;
+      if (error) throw await financialFunctionError(error);
+      if (data?.ok !== true || data.id !== id) {
+        throw new Error(data?.error || "O servidor não confirmou a exclusão. Atualize a lista antes de tentar novamente.");
+      }
       return data;
     },
     onSuccess: () => {
