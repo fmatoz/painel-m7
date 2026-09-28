@@ -15,7 +15,7 @@ BEGIN
     RAISE EXCEPTION 'FAIL private API permissions';
   END IF;
   IF (SELECT count(*) FROM pg_constraint WHERE contype='f' AND confrelid='m7_private.panel_identities'::regclass
-      AND conrelid IN ('public.team_settings'::regclass,'public.sdr_sales'::regclass)) <> 3 THEN
+      AND conrelid IN ('public.team_settings'::regclass,'public.sdr_sales'::regclass)) <> 4 THEN
     RAISE EXCEPTION 'FAIL preserved foreign keys';
   END IF;
   r:=m7_private.sales_api('{"action":"sales-list","sessionValid":false}');
@@ -24,7 +24,7 @@ BEGIN
   IF (r->>'ok')::boolean THEN RAISE EXCEPTION 'FAIL SDR settings'; END IF;
   r:=m7_private.sales_api(admin || '{"action":"settings-update","changes":{"commission_rate":20,"announcement_title":"Teste rollback","announcement_message":"Não publicado"}}');
   IF NOT (r->>'ok')::boolean OR (r->'data'->>'commission_rate')::numeric<>20 THEN RAISE EXCEPTION 'FAIL rate 20: %',r; END IF;
-  r:=m7_private.sales_api(sdr || '{"action":"sale-create","changes":{"client_name":"Teste rollback","service":"Site","sale_value":600,"sale_date":"2026-09-22","seller_id":"00000000-0000-4000-8000-000000000001","commission_rate":99,"status":"paid"}}');
+  r:=m7_private.sales_api(sdr || '{"action":"sale-create","changes":{"client_name":"Teste rollback","service":"Site","sale_value":600,"sale_date":"2026-09-22","commission_rate":99,"status":"paid"}}');
   IF NOT (r->>'ok')::boolean OR (r->'data'->>'commission_value')::numeric<>120
     OR r->'data'->>'seller_id'<>sdr->>'userId' OR r->'data'->>'seller_name'<>'Teste SDR'
     OR r->'data'->>'status'<>'pending' THEN RAISE EXCEPTION 'FAIL sale creation: %',r; END IF;

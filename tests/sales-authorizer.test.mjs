@@ -124,3 +124,59 @@ test("Home-only users can receive settings without gaining CRM permission", () =
   assert.equal(r.canInicio, true);
   assert.equal(r.canCrm, false);
 });
+
+const targetId = "00000000-0000-4000-8000-000000000003";
+const target = { user_id: targetId, full_name: "Leila teste", active: true, can_crm: true };
+const adminProfile = { ...sdrAccess.body[0], is_admin: true };
+test("admin target is resolved from verified profiles, not the browser", () => {
+  const r = authorize(
+    {
+      action: "sale-create",
+      changes: { seller_id: targetId, seller_name: "forged" },
+      verifiedSeller: { id: "forged" },
+      eligibleSellers: [{ id: "forged" }],
+    },
+    validAuth,
+    { statusCode: 200, body: [adminProfile, target] },
+  );
+  assert.equal(r.userId, sdrId);
+  assert.equal(r.verifiedSeller.id, targetId);
+  assert.equal(r.verifiedSeller.name, "Leila teste");
+  assert.equal(r.eligibleSellers.length, 0);
+});
+test("SDR cannot forge a verified target or read the seller directory", () => {
+  const r = authorize(
+    {
+      action: "sellers-list",
+      changes: { seller_id: targetId },
+      verifiedSeller: target,
+      isAdmin: true,
+    },
+    validAuth,
+    { statusCode: 200, body: [...sdrAccess.body, target] },
+  );
+  assert.equal(r.verifiedSeller, null);
+  assert.equal(r.eligibleSellers.length, 0);
+});
+test("missing, disabled and non-CRM targets cannot be selected", () => {
+  for (const row of [null, { ...target, active: false }, { ...target, can_crm: false }]) {
+    const r = authorize({ action: "sale-create", changes: { seller_id: targetId } }, validAuth, {
+      statusCode: 200,
+      body: [adminProfile, ...(row ? [row] : [])],
+    });
+    assert.equal(r.verifiedSeller, null);
+  }
+});
+test("admin directory exposes only active CRM user IDs and names", () => {
+  const r = authorize({ action: "sellers-list" }, validAuth, {
+    statusCode: 200,
+    body: [
+      adminProfile,
+      target,
+      { ...target, user_id: "disabled", active: false },
+      { ...target, user_id: "no-crm", can_crm: false },
+    ],
+  });
+  assert.equal(r.eligibleSellers.length, 2);
+  assert.deepEqual(Object.keys(r.eligibleSellers[0]).sort(), ["id", "name"]);
+});

@@ -26,7 +26,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { salesApi } from "@/lib/sales-api";
 import type { Tables } from "@/integrations/supabase/types";
 
-type Sale = Tables<"sdr_sales">;
+type Sale = Tables<"sdr_sales"> & { created_by?: string | null; created_by_name?: string | null };
+type Seller = { id: string; name: string };
 type TeamSettings = Tables<"team_settings">;
 type SaleStatus = "pending" | "approved" | "rejected" | "paid";
 
@@ -89,6 +90,11 @@ function SalesComponent() {
   const [saleValue, setSaleValue] = useState("");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
+  const [sellerId, setSellerId] = useState("");
+
+  useEffect(() => {
+    setSellerId("");
+  }, [user?.id, isAdmin]);
 
   useEffect(() => {
     if (!authLoading && !session) navigate({ to: "/login", search: {} as never });
@@ -116,10 +122,24 @@ function SalesComponent() {
     refetchOnWindowFocus: true,
   });
 
+  const sellersQuery = useQuery({
+    queryKey: ["sales-sellers", user?.id],
+    enabled: Boolean(session && !access.loading && isAdmin && access.can("crm")),
+    queryFn: () => salesApi<Seller[]>(session!.access_token, { action: "sellers-list" }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const sellerUnavailable = Boolean(
+    isAdmin &&
+    sellerId &&
+    (sellersQuery.isError || !sellersQuery.data?.some((seller) => seller.id === sellerId)),
+  );
+
   const createSale = useMutation({
     mutationFn: async () => {
       const parsedValue = parseMoneyInput(saleValue);
       const selectedService = service === "Outro" ? customService.trim() : service;
+      if (sellerUnavailable) throw new Error("Atualize a lista e selecione um vendedor ativo.");
       if (
         !clientName.trim() ||
         !selectedService ||
@@ -136,6 +156,7 @@ function SalesComponent() {
           sale_value: parsedValue,
           sale_date: saleDate,
           notes: notes.trim(),
+          ...(isAdmin && sellerId ? { seller_id: sellerId } : {}),
         },
       });
     },
@@ -146,8 +167,9 @@ function SalesComponent() {
       setCustomService("");
       setSaleValue("");
       setNotes("");
+      setSellerId("");
       toast.success(
-        `Venda registrada com ${Number(sale.commission_rate).toLocaleString("pt-BR")}% de comissão.`,
+        `Venda registrada para ${sale.seller_name} com ${Number(sale.commission_rate).toLocaleString("pt-BR")}% de comissão.`,
       );
     },
     onError: (error) => toast.error(errorMessage(error, "Não foi possível registrar a venda.")),
@@ -299,6 +321,50 @@ function SalesComponent() {
                   O sistema aplicará automaticamente a comissão vigente.
                 </p>
               </div>
+              {isAdmin && (
+                <div className="mb-4">
+                  <label className="block max-w-md text-xs text-zinc-400">
+                    Vendedor responsável
+                    <select
+                      value={sellerId}
+                      onChange={(event) => setSellerId(event.target.value)}
+                      disabled={createSale.isPending}
+                      className="mt-1 h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm"
+                    >
+                      <option value="">
+                        Eu mesmo ({access.profile?.full_name || "meu usuário"})
+                      </option>
+                      {(sellersQuery.data ?? [])
+                        .filter((seller) => seller.id !== user.id)
+                        .map((seller) => (
+                          <option key={seller.id} value={seller.id}>
+                            {seller.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    A venda e a comissão aparecerão para o vendedor escolhido. Seu nome ficará
+                    registrado como autor do cadastro.
+                  </p>
+                  {sellersQuery.isFetching && (
+                    <p className="mt-1 text-xs text-zinc-500">Atualizando vendedores…</p>
+                  )}
+                  {(sellersQuery.isError || sellerUnavailable) && (
+                    <div className="mt-2 text-xs text-amber-400" role="alert">
+                      Não foi possível confirmar o vendedor. Você ainda pode registrar em seu
+                      próprio nome.
+                      <button
+                        type="button"
+                        className="ml-2 underline"
+                        onClick={() => sellersQuery.refetch()}
+                      >
+                        Atualizar lista
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <label className="text-xs text-zinc-400 xl:col-span-2">
                   Cliente
@@ -366,7 +432,12 @@ function SalesComponent() {
               <div className="mt-5 flex justify-end">
                 <Button
                   onClick={() => createSale.mutate()}
-                  disabled={createSale.isPending || !settingsQuery.data || settingsQuery.isError}
+                  disabled={
+                    createSale.isPending ||
+                    !settingsQuery.data ||
+                    settingsQuery.isError ||
+                    sellerUnavailable
+                  }
                   className="bg-emerald-600 hover:bg-emerald-500"
                 >
                   {createSale.isPending ? (
@@ -423,6 +494,11 @@ function SalesComponent() {
                             </div>
                             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-500">
                               {isAdmin && <span>Vendedor: {sale.seller_name}</span>}
+                              {sale.created_by && sale.created_by !== sale.seller_id && (
+                                <span>
+                                  Registrada por: {sale.created_by_name || "Administrador"}
+                                </span>
+                              )}
                               <span>{sale.service}</span>
                               <span>{formatDate(sale.sale_date)}</span>
                               <span>
