@@ -20,6 +20,7 @@ import {
   Phone,
   RefreshCw,
   Search,
+  Snowflake,
   Star,
   TrendingUp,
   UserCheck,
@@ -107,6 +108,7 @@ const stages: { id: Stage; label: string; color: string }[] = [
   { id: "reuniao", label: "Reunião", color: "bg-amber-400" },
   { id: "proposta", label: "Proposta", color: "bg-orange-400" },
   { id: "cliente", label: "Cliente", color: "bg-emerald-400" },
+  { id: "congelado", label: "Congelado", color: "bg-slate-400" },
   { id: "perdido", label: "Perdido", color: "bg-zinc-500" },
   { id: "fora_do_perfil", label: "Fora do perfil", color: "bg-rose-400" },
 ];
@@ -721,7 +723,11 @@ function CrmComponent() {
                     className="min-h-[68vh] rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
                   >
                     <div className="mb-3 flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
+                      {column.stage === "congelado" ? (
+                        <Snowflake className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                      ) : (
+                        <span className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
+                      )}
                       <h3 className="font-semibold">{column.label}</h3>
                       <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
                         {stageLeads.length}
