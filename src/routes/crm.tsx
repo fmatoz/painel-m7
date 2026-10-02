@@ -786,6 +786,8 @@ function Nav({
 }
 
 function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
+  const lastModified = new Date(lead.last_touched_at ?? lead.created_at);
+  const hasLastModified = Number.isFinite(lastModified.getTime());
   const mapsOnly = lead.source === "Maps";
   const ownWebsite = hasOwnWebsite(lead.website);
   const confirmedSite =
@@ -911,12 +913,27 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           {when(lead.next_action_at)}
         </p>
       )}
-      {lead.assigned_to_name && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-violet-300">
-          <UserCheck className="h-3.5 w-3.5" />
-          {lead.assigned_to_name}
-        </p>
-      )}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {lead.assigned_to_name && (
+          <p
+            className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-violet-300"
+            title={lead.assigned_to_name}
+          >
+            <UserCheck className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{lead.assigned_to_name}</span>
+          </p>
+        )}
+        {hasLastModified && (
+          <time
+            dateTime={lastModified.toISOString()}
+            title={`Última alteração: ${when(lastModified.toISOString())}`}
+            aria-label={`Última alteração: ${when(lastModified.toISOString())}`}
+            className="ml-auto shrink-0 text-right text-[10px] tabular-nums text-zinc-400"
+          >
+            {lastModified.toLocaleDateString("pt-BR")}
+          </time>
+        )}
+      </div>
     </div>
   );
 }
