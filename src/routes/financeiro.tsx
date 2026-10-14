@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { financialFunctionError } from "@/lib/finance-error";
+import { deleteFinancialEntry } from "@/lib/finance-delete";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -279,14 +280,7 @@ function FinanceiroComponent() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke("n8n-workflows", {
-        body: { action: "finance-delete", lancamento: { id } },
-      });
-      if (error) throw await financialFunctionError(error);
-      if (data?.ok !== true || data.id !== id) {
-        throw new Error(data?.error || "O servidor não confirmou a exclusão. Atualize a lista antes de tentar novamente.");
-      }
-      return data;
+      return deleteFinancialEntry(session?.access_token || "", id);
     },
     onSuccess: () => {
       toast.success("Lançamento excluído!");
@@ -1109,7 +1103,9 @@ function FinanceiroComponent() {
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-zinc-400">Valor:</span>
-                <span className="font-bold">{formatCurrency(selectedRecebimento.valor_previsto)}</span>
+                <span className="font-bold">
+                  {formatCurrency(selectedRecebimento.valor_previsto)}
+                </span>
               </div>
             </div>
           )}

@@ -163,7 +163,7 @@ const step5 = node({
     name: "Executar vendas e comissão",
     parameters: {
       operation: "executeQuery",
-      query: "SELECT m7_private.sales_api($1::jsonb) AS response;",
+      query: "SELECT CASE WHEN $1::jsonb->>'action' = 'sale-update' THEN m7_private.edit_sale($1::jsonb) ELSE m7_private.sales_api($1::jsonb) END AS response;",
       options: {
         queryReplacement: expr("{{ JSON.stringify($json) }}"),
         queryBatching: "single",

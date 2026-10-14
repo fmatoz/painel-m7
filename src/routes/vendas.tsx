@@ -10,6 +10,7 @@ import {
   Loader2,
   LogOut,
   Menu,
+  Pencil,
   Plus,
   Trash2,
   WalletCards,
@@ -20,6 +21,13 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useAppAccess } from "@/hooks/use-access";
 import { useAppSidebar } from "@/hooks/use-app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
@@ -91,6 +99,25 @@ function SalesComponent() {
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
   const [sellerId, setSellerId] = useState("");
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [editForm, setEditForm] = useState({
+    client: "",
+    service: "",
+    value: "",
+    date: "",
+    notes: "",
+  });
+
+  function openEdit(sale: Sale) {
+    setEditForm({
+      client: sale.client_name,
+      service: sale.service,
+      value: Number(sale.sale_value).toFixed(2).replace(".", ","),
+      date: sale.sale_date,
+      notes: sale.notes || "",
+    });
+    setEditingSale(sale);
+  }
 
   useEffect(() => {
     setSellerId("");
@@ -188,6 +215,43 @@ function SalesComponent() {
       toast.success("Situação da venda atualizada.");
     },
     onError: (error) => toast.error(errorMessage(error, "Não foi possível atualizar a venda.")),
+  });
+
+  const editSale = useMutation({
+    mutationFn: async () => {
+      if (!isAdmin || !editingSale) throw new Error("Somente administradores podem editar vendas.");
+      const value = parseMoneyInput(editForm.value);
+      if (
+        !editForm.client.trim() ||
+        !editForm.service.trim() ||
+        !editForm.date ||
+        !Number.isFinite(value) ||
+        value <= 0
+      ) {
+        throw new Error("Preencha cliente, serviço, valor e data corretamente.");
+      }
+      return salesApi<Sale>(session!.access_token, {
+        action: "sale-update",
+        saleId: editingSale.id,
+        changes: {
+          client_name: editForm.client.trim(),
+          service: editForm.service.trim(),
+          sale_value: value,
+          sale_date: editForm.date,
+          notes: editForm.notes.trim(),
+          expected_updated_at: editingSale.updated_at,
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
+      setEditingSale(null);
+      toast.success("Venda atualizada. A porcentagem original foi mantida.");
+    },
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ["sdr-sales"] });
+      toast.error(errorMessage(error, "Não foi possível editar a venda."));
+    },
   });
 
   const deleteSale = useMutation({
@@ -529,6 +593,20 @@ function SalesComponent() {
                             </div>
                           </div>
                           <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                            {isAdmin && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openEdit(sale)}
+                                disabled={
+                                  updateStatus.isPending ||
+                                  deleteSale.isPending ||
+                                  editSale.isPending
+                                }
+                              >
+                                <Pencil className="mr-1 h-4 w-4" /> Editar
+                              </Button>
+                            )}
                             {isAdmin && status !== "approved" && status !== "paid" && (
                               <Button
                                 size="sm"
@@ -591,6 +669,112 @@ function SalesComponent() {
           </div>
         </div>
       </main>
+      <Dialog
+        open={Boolean(isAdmin && editingSale)}
+        onOpenChange={(open) => {
+          if (!open && !editSale.isPending) setEditingSale(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar venda</DialogTitle>
+            <DialogDescription>
+              Vendedor: {editingSale?.seller_name}. A taxa original de{" "}
+              {editingSale?.commission_rate}% será mantida. A situação da venda não será alterada.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editSale.isPending) editSale.mutate();
+            }}
+          >
+            <fieldset disabled={editSale.isPending} className="space-y-4">
+              <label className="block text-sm">
+                Cliente
+                <Input
+                  className="mt-1"
+                  required
+                  maxLength={200}
+                  value={editForm.client}
+                  onChange={(e) => setEditForm({ ...editForm, client: e.target.value })}
+                />
+              </label>
+              <label className="block text-sm">
+                Serviço
+                <Input
+                  className="mt-1"
+                  required
+                  maxLength={120}
+                  value={editForm.service}
+                  onChange={(e) => setEditForm({ ...editForm, service: e.target.value })}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm">
+                  Valor da venda
+                  <Input
+                    className="mt-1"
+                    required
+                    inputMode="decimal"
+                    value={editForm.value}
+                    onChange={(e) => setEditForm({ ...editForm, value: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Data
+                  <Input
+                    className="mt-1"
+                    required
+                    type="date"
+                    min="1900-01-01"
+                    max="9999-12-31"
+                    value={editForm.date}
+                    onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                  />
+                </label>
+              </div>
+              <label className="block text-sm">
+                Observações
+                <Textarea
+                  className="mt-1"
+                  maxLength={2000}
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                />
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Comissão recalculada:{" "}
+                {Number.isFinite(parseMoneyInput(editForm.value)) &&
+                parseMoneyInput(editForm.value) > 0
+                  ? money(
+                      ((Math.round(parseMoneyInput(editForm.value) * 100) / 100) *
+                        Number(editingSale?.commission_rate || 0)) /
+                        100,
+                    )
+                  : "—"}
+              </p>
+              {editingSale?.status === "paid" && (
+                <p
+                  role="alert"
+                  className="rounded-md border border-amber-600 bg-amber-500/10 p-3 text-sm"
+                >
+                  Esta comissão já está marcada como paga. Alterar o valor também atualizará o total
+                  exibido como pago; confira o pagamento antes de salvar.
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setEditingSale(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  {editSale.isPending ? "Salvando…" : "Salvar alterações"}
+                </Button>
+              </div>
+            </fieldset>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
