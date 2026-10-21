@@ -1,0 +1,342 @@
+{
+  "workflowId": "i2L9SMVZyr5ZKzpJ",
+  "previousVersion": "62b90422-fbf4-4da8-bd6e-067b70ccc392",
+  "operations": [
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Controle Luana - Entrada",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          -324,
+          -480
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "jZl3Efj7Q2gOlBmi",
+            "name": "Postgres account"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT $1::jsonb AS payload FROM luana_control_private.state WHERE id = 'canel_luana' AND enabled IS TRUE;",
+          "options": {
+            "queryBatching": "independently",
+            "connectionTimeout": 10,
+            "queryReplacement": "={{ [JSON.stringify($json)] }}"
+          }
+        }
+      }
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Continuar Luana - Entrada",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -114,
+          -480
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return $input.all().map((item, index) => ({ json: item.json.payload, pairedItem: { item: index } }));"
+        }
+      }
+    },
+    {
+      "type": "removeConnection",
+      "source": "Dados",
+      "sourceIndex": 0,
+      "target": "expediente",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Dados",
+      "sourceIndex": 0,
+      "target": "Controle Luana - Entrada",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Controle Luana - Entrada",
+      "target": "Continuar Luana - Entrada",
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Continuar Luana - Entrada",
+      "target": "expediente",
+      "connectionType": "main"
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Controle Luana - Envio WhatsApp",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          7916,
+          -160
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "jZl3Efj7Q2gOlBmi",
+            "name": "Postgres account"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT $1::jsonb AS payload FROM luana_control_private.state WHERE id = 'canel_luana' AND enabled IS TRUE;",
+          "options": {
+            "queryBatching": "independently",
+            "connectionTimeout": 10,
+            "queryReplacement": "={{ [JSON.stringify($json)] }}"
+          }
+        }
+      }
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Continuar Luana - Envio WhatsApp",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          8126,
+          -160
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return $input.all().map((item, index) => ({ json: item.json.payload, pairedItem: { item: index } }));"
+        }
+      }
+    },
+    {
+      "type": "removeConnection",
+      "source": "Loop Over Items3",
+      "sourceIndex": 1,
+      "target": "Evolution API4",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Loop Over Items3",
+      "sourceIndex": 1,
+      "target": "Controle Luana - Envio WhatsApp",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Controle Luana - Envio WhatsApp",
+      "target": "Continuar Luana - Envio WhatsApp",
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Continuar Luana - Envio WhatsApp",
+      "target": "Evolution API4",
+      "connectionType": "main"
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Controle Luana - Resposta de áudio",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          3372,
+          -496
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "jZl3Efj7Q2gOlBmi",
+            "name": "Postgres account"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT $1::jsonb AS payload FROM luana_control_private.state WHERE id = 'canel_luana' AND enabled IS TRUE;",
+          "options": {
+            "queryBatching": "independently",
+            "connectionTimeout": 10,
+            "queryReplacement": "={{ [JSON.stringify($json)] }}"
+          }
+        }
+      }
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Continuar Luana - Resposta de áudio",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3582,
+          -496
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return $input.all().map((item, index) => ({ json: item.json.payload, pairedItem: { item: index } }));"
+        }
+      }
+    },
+    {
+      "type": "removeConnection",
+      "source": "If",
+      "sourceIndex": 0,
+      "target": "Enviar texto",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "If",
+      "sourceIndex": 0,
+      "target": "Controle Luana - Resposta de áudio",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "removeConnection",
+      "source": "Transcribe a recording",
+      "sourceIndex": 1,
+      "target": "Enviar texto",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Transcribe a recording",
+      "sourceIndex": 1,
+      "target": "Controle Luana - Resposta de áudio",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Controle Luana - Resposta de áudio",
+      "target": "Continuar Luana - Resposta de áudio",
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Continuar Luana - Resposta de áudio",
+      "target": "Enviar texto",
+      "connectionType": "main"
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Controle Luana - Fora de horário",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          108,
+          -288
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "jZl3Efj7Q2gOlBmi",
+            "name": "Postgres account"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT $1::jsonb AS payload FROM luana_control_private.state WHERE id = 'canel_luana' AND enabled IS TRUE;",
+          "options": {
+            "queryBatching": "independently",
+            "connectionTimeout": 10,
+            "queryReplacement": "={{ [JSON.stringify($json)] }}"
+          }
+        }
+      }
+    },
+    {
+      "type": "addNode",
+      "node": {
+        "name": "Continuar Luana - Fora de horário",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          318,
+          -288
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return $input.all().map((item, index) => ({ json: item.json.payload, pairedItem: { item: index } }));"
+        }
+      }
+    },
+    {
+      "type": "removeConnection",
+      "source": "If1",
+      "sourceIndex": 1,
+      "target": "fora de expediente",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "If1",
+      "sourceIndex": 1,
+      "target": "Controle Luana - Fora de horário",
+      "targetIndex": 0,
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Controle Luana - Fora de horário",
+      "target": "Continuar Luana - Fora de horário",
+      "connectionType": "main"
+    },
+    {
+      "type": "addConnection",
+      "source": "Continuar Luana - Fora de horário",
+      "target": "fora de expediente",
+      "connectionType": "main"
+    },
+    {
+      "type": "addNodeGroup",
+      "name": "Controle global | Entrada",
+      "nodeNames": [
+        "Controle Luana - Entrada",
+        "Continuar Luana - Entrada"
+      ],
+      "description": "Consulta o controle global da Luana e preserva os dados originais. Desativada, interrompe este caminho sem enviar respostas."
+    },
+    {
+      "type": "addNodeGroup",
+      "name": "Controle global | Envio WhatsApp",
+      "nodeNames": [
+        "Controle Luana - Envio WhatsApp",
+        "Continuar Luana - Envio WhatsApp"
+      ],
+      "description": "Consulta o controle global da Luana e preserva os dados originais. Desativada, interrompe este caminho sem enviar respostas."
+    },
+    {
+      "type": "addNodeGroup",
+      "name": "Controle global | Resposta de áudio",
+      "nodeNames": [
+        "Controle Luana - Resposta de áudio",
+        "Continuar Luana - Resposta de áudio"
+      ],
+      "description": "Consulta o controle global da Luana e preserva os dados originais. Desativada, interrompe este caminho sem enviar respostas."
+    },
+    {
+      "type": "addNodeGroup",
+      "name": "Controle global | Fora de horário",
+      "nodeNames": [
+        "Controle Luana - Fora de horário",
+        "Continuar Luana - Fora de horário"
+      ],
+      "description": "Consulta o controle global da Luana e preserva os dados originais. Desativada, interrompe este caminho sem enviar respostas."
+    }
+  ]
+}
