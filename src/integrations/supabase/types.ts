@@ -125,6 +125,7 @@ export type Database = {
           assigned_to: string | null;
           assigned_to_email: string;
           assigned_to_name: string;
+          co_assignees: Json;
           capital_social: number | null;
           city: string;
           cnae: string;
@@ -167,6 +168,7 @@ export type Database = {
           assigned_to?: string | null;
           assigned_to_email?: string;
           assigned_to_name?: string;
+          co_assignees?: Json;
           capital_social?: number | null;
           city?: string;
           cnae?: string;
@@ -208,6 +210,7 @@ export type Database = {
           assigned_to?: string | null;
           assigned_to_email?: string;
           assigned_to_name?: string;
+          co_assignees?: Json;
           capital_social?: number | null;
           city?: string;
           cnae?: string;

@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { isLeadAssignee, leadAssignees, leadAssigneeNames, type AssignmentMode } from "@/lib/crm-assignment";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -470,6 +471,7 @@ function CrmComponent() {
       freshLead &&
       (freshLead.assigned_to !== selected.assigned_to ||
         freshLead.assigned_to_name !== selected.assigned_to_name ||
+        JSON.stringify(freshLead.co_assignees) !== JSON.stringify(selected.co_assignees) ||
         freshLead.stage !== selected.stage ||
         freshLead.facebook_url !== selected.facebook_url ||
         freshLead.site_quality !== selected.site_quality ||
@@ -492,7 +494,7 @@ function CrmComponent() {
   });
 
   const assignLead = useMutation({
-    mutationFn: async ({ id, mode }: { id: string; mode: "claim" | "release" | "takeover" }) =>
+    mutationFn: async ({ id, mode }: { id: string; mode: AssignmentMode }) =>
       crmApi<Lead>(session!.access_token, {
         action: "assign",
         leadId: id,
@@ -502,7 +504,7 @@ function CrmComponent() {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       setSelected((current) => (current?.id === lead.id ? lead : current));
       toast.success(
-        lead.assigned_to_name ? `Lead atribuído a ${lead.assigned_to_name}.` : "Lead liberado.",
+        leadAssigneeNames(lead) ? `Responsáveis: ${leadAssigneeNames(lead)}.` : "Lead liberado.",
       );
     },
     onError: (error) => {
@@ -545,12 +547,11 @@ function CrmComponent() {
       const leadIsUnassigned = isUnassigned(lead);
       const matchesAssignee =
         assignee === "all" ||
-        (assignee === "mine" && lead.assigned_to === user?.id) ||
+        (assignee === "mine" && isLeadAssignee(lead, user?.id)) ||
         (assignee === "unassigned" && leadIsUnassigned) ||
         (isNamedAssignee &&
           (leadIsUnassigned ||
-            lead.assigned_to === assignee ||
-            lead.assigned_to_name === assignee));
+            leadAssignees(lead).some((person) => person.id === assignee || person.name === assignee)));
       const leadHasWebsite = hasOwnWebsite(lead.website);
       const matchesWebsite =
         websiteFilter === "all" ||
@@ -568,8 +569,8 @@ function CrmComponent() {
   const assignees = useMemo(() => {
     const people = new Map<string, string>();
     for (const lead of leadsQuery.data ?? []) {
-      if (lead.assigned_to && lead.assigned_to_name) {
-        people.set(lead.assigned_to, lead.assigned_to_name);
+      for (const person of leadAssignees(lead)) {
+        people.set(person.id, person.name);
       }
     }
     return [...people.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
@@ -914,13 +915,13 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
         </p>
       )}
       <div className="mt-2 flex items-center justify-between gap-2">
-        {lead.assigned_to_name && (
+        {leadAssigneeNames(lead) && (
           <p
             className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-violet-300"
-            title={lead.assigned_to_name}
+            title={leadAssigneeNames(lead)}
           >
             <UserCheck className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{lead.assigned_to_name}</span>
+            <span className="break-words">{leadAssigneeNames(lead)}</span>
           </p>
         )}
         {hasLastModified && (
@@ -960,7 +961,7 @@ function LeadDialog({
   assigning: boolean;
   currentUserId: string;
   isAdmin: boolean;
-  onAssign: (mode: "claim" | "release" | "takeover") => void;
+  onAssign: (mode: AssignmentMode) => void;
   accessToken: string;
 }) {
   const [draft, setDraft] = useState<Partial<Lead>>({});
@@ -1364,10 +1365,10 @@ function LeadDialog({
                   </div>
                   <div className="space-y-3">
                     <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
-                      {lead.assigned_to_name && (
+                      {leadAssigneeNames(lead) && (
                         <div className="mb-3 flex items-center gap-2 text-sm text-violet-200">
                           <UserCheck className="h-4 w-4" />
-                          <span>{lead.assigned_to_name}</span>
+                          <span>{leadAssigneeNames(lead)}</span>
                         </div>
                       )}
                       {!lead.assigned_to ? (
@@ -1381,7 +1382,7 @@ function LeadDialog({
                           {assigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                           Assumir lead
                         </Button>
-                      ) : lead.assigned_to === currentUserId ? (
+                      ) : isLeadAssignee(lead, currentUserId) ? (
                         <Button
                           type="button"
                           size="sm"
@@ -1390,31 +1391,35 @@ function LeadDialog({
                           disabled={assigning}
                           className="w-full border-zinc-700 bg-zinc-900"
                         >
-                          Liberar lead
+                          {leadAssignees(lead).length > 1 ? "Sair do atendimento" : "Liberar lead"}
                         </Button>
                       ) : isAdmin ? (
                         <div className="flex gap-2">
                           <Button
                             type="button"
                             size="sm"
-                            onClick={() => onAssign("takeover")}
+                            onClick={() => onAssign("join")}
                             disabled={assigning}
                             className="flex-1 bg-violet-600 hover:bg-violet-500"
                           >
-                            Transferir para mim
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onAssign("release")}
-                            disabled={assigning}
-                            className="border-zinc-700 bg-zinc-900"
-                          >
-                            Liberar
+                            Assumir junto
                           </Button>
                         </div>
                       ) : null}
+                      {!isAdmin && isLeadAssignee(lead, currentUserId) && (
+                        <div className="mt-2 space-y-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => onAssign("share")}
+                            disabled={assigning}
+                            className="w-full bg-violet-600 hover:bg-violet-500"
+                          >
+                            Compartilhar com Felipe
+                          </Button>
+                          <p className="text-xs text-zinc-400">Vocês dois continuam responsáveis pelo mesmo lead.</p>
+                        </div>
+                      )}
                     </div>
                     <label className="block text-xs text-zinc-400">
                       Etapa

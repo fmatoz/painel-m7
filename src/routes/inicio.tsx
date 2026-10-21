@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { salesApi } from "@/lib/sales-api";
+import { isLeadAssignee } from "@/lib/crm-assignment";
 import type { Json, Tables } from "@/integrations/supabase/types";
 import { Progress } from "@/components/ui/progress";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -412,7 +413,7 @@ function InicioComponent() {
 
   const personalLeads = useMemo(
     () =>
-      (leadsQuery.data ?? []).filter((lead) => !lead.assigned_to || lead.assigned_to === user?.id),
+      (leadsQuery.data ?? []).filter((lead) => !lead.assigned_to || isLeadAssignee(lead, user?.id)),
     [leadsQuery.data, user?.id],
   );
 

@@ -45,27 +45,9 @@ updated AS (
   RETURNING to_jsonb(l) AS lead
 ),
 assigned AS (
-  UPDATE public.crm_leads l SET
-    assigned_to = CASE WHEN (SELECT data->>'assignmentMode' FROM p)='release'
-      THEN NULL ELSE (SELECT NULLIF(data->>'userId','')::uuid FROM p) END,
-    assigned_to_name = CASE WHEN (SELECT data->>'assignmentMode' FROM p)='release'
-      THEN '' ELSE left((SELECT data->>'userName' FROM p),200) END,
-    assigned_to_email = CASE WHEN (SELECT data->>'assignmentMode' FROM p)='release'
-      THEN '' ELSE left((SELECT data->>'userEmail' FROM p),320) END,
-    assigned_at = CASE WHEN (SELECT data->>'assignmentMode' FROM p)='release'
-      THEN NULL ELSE now() END
+  SELECT m7_private.assign_crm_lead((SELECT data FROM p)) AS response
   WHERE (SELECT allowed FROM access_check)
     AND (SELECT data->>'action' FROM p)='assign'
-    AND l.id=(SELECT NULLIF(data->>'leadId','')::uuid FROM p)
-    AND (
-      ((SELECT data->>'assignmentMode' FROM p)='claim' AND l.assigned_to IS NULL)
-      OR ((SELECT data->>'assignmentMode' FROM p)='release'
-          AND (l.assigned_to=(SELECT NULLIF(data->>'userId','')::uuid FROM p)
-               OR COALESCE((SELECT (data->>'isAdmin')::boolean FROM p),false)))
-      OR ((SELECT data->>'assignmentMode' FROM p)='takeover'
-          AND COALESCE((SELECT (data->>'isAdmin')::boolean FROM p),false))
-    )
-  RETURNING to_jsonb(l) AS lead
 ),
 material_created AS (
   INSERT INTO public.crm_materials (title, usage_context, content_format, message, created_by, author_name)
@@ -109,23 +91,6 @@ material_deleted AS (
       OR COALESCE((SELECT (data->>'isAdmin')::boolean FROM p),false)
     )
   RETURNING m.id
-),
-assignment_activity AS (
-  INSERT INTO public.crm_activities (lead_id, activity_type, description, metadata, created_by)
-  SELECT
-    (lead->>'id')::uuid,
-    'assignment',
-    CASE WHEN (SELECT data->>'assignmentMode' FROM p)='release'
-      THEN 'Responsável removido por ' || (SELECT data->>'userName' FROM p)
-      ELSE 'Lead assumido por ' || (SELECT data->>'userName' FROM p) END,
-    jsonb_build_object(
-      'mode',(SELECT data->>'assignmentMode' FROM p),
-      'performed_by',(SELECT data->>'userId' FROM p),
-      'responsible_name',COALESCE(lead->>'assigned_to_name','')
-    ),
-    NULL
-  FROM assigned
-  RETURNING id
 ),
 queued AS (
   INSERT INTO public.crm_commands (command_type, lead_id, created_by)
@@ -173,19 +138,8 @@ SELECT CASE
     THEN jsonb_build_object('ok',false,'error','Material não encontrado ou sem permissão para excluir.')
   WHEN (SELECT data->>'action' FROM p)='update'
     THEN jsonb_build_object('ok',EXISTS(SELECT 1 FROM updated),'data',(SELECT lead FROM updated LIMIT 1))
-  WHEN (SELECT data->>'action' FROM p)='assign' AND EXISTS(SELECT 1 FROM assigned)
-    THEN jsonb_build_object('ok',true,'data',(SELECT lead FROM assigned LIMIT 1))
   WHEN (SELECT data->>'action' FROM p)='assign'
-    THEN jsonb_build_object(
-      'ok',false,
-      'error',COALESCE(
-        (SELECT CASE
-          WHEN l.assigned_to IS NOT NULL THEN 'Este lead já está com ' || COALESCE(NULLIF(l.assigned_to_name,''),'outro usuário') || '.'
-          ELSE 'A atribuição não pôde ser alterada.'
-        END FROM public.crm_leads l WHERE l.id=(SELECT NULLIF(data->>'leadId','')::uuid FROM p)),
-        'Lead não encontrado.'
-      )
-    )
+    THEN (SELECT response FROM assigned)
   WHEN (SELECT data->>'action' FROM p)='command'
     THEN jsonb_build_object('ok',true,'queued',true,'id',(SELECT id FROM queued LIMIT 1))
   ELSE jsonb_build_object('ok',false,'error','Ação inválida.')
