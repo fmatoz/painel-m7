@@ -1,2 +1,31 @@
 :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172c24;background:#f4f5f0;font-synthesis:none;color-scheme:light}*{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(ellipse at 15% 0%,#e7eee3 0%,transparent 55%),#f4f5f0}.panel{max-width:600px;margin:auto;padding:36px 24px 32px}.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:800;letter-spacing:1.4px}.brand>div>span{display:block;margin-top:2px;font-size:10px;font-weight:500;letter-spacing:1.1px;text-transform:uppercase;color:#607166}.brand-mark{display:grid;place-items:center;width:43px;height:43px;background:#1d4431;color:#eff4e8;border-radius:12px;font-size:28px;font-weight:700;letter-spacing:0}.private-label{margin-left:auto;padding:7px 10px;border:1px solid #d7e0d2;border-radius:20px;color:#526254;font-size:10px;letter-spacing:.2px;font-weight:500}.intro{margin:65px 0 28px}.eyebrow{font-size:10px;font-weight:700;letter-spacing:2.5px;color:#57705b}.intro h1{font-size:clamp(30px,7vw,42px);font-weight:600;letter-spacing:-1.7px;margin:12px 0}.intro>p:last-child{font-size:15px;line-height:1.7;color:#617066;max-width:360px;margin:0}.control{padding:28px;border:1px solid #dbe2d5;border-radius:22px;background:#fff;box-shadow:0 12px 40px -22px #203b2b3b}.control-top{display:flex;align-items:center;gap:13px}.avatar{position:relative;display:grid;place-items:center;width:48px;height:48px;background:#ebefe7;border-radius:50%;font-size:23px;font-weight:600;color:#406044}.avatar span{position:absolute;right:0;bottom:0;width:12px;height:12px;background:#a9b2aa;border:3px solid #fff;border-radius:50%}.control-top h2{font-size:17px;margin:0 0 3px;letter-spacing:-.3px}.control-top p{font-size:11px;color:#7b857c;margin:0}.badge{margin-left:auto;white-space:nowrap;background:#f0f2ed;color:#687569;border-radius:20px;padding:6px 10px;font-size:10px;font-weight:650}.status-block{margin:32px 0 25px;padding-top:25px;border-top:1px solid #edf0e9;min-height:117px}.status-block h3{font-size:22px;font-weight:550;letter-spacing:-.7px;margin:0 0 9px}.status-block p{font-size:13px;line-height:1.7;color:#6b776d;margin:0;max-width:370px}.toggle{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;border:0;border-radius:13px;background:#244e36;color:#fff;font:600 14px inherit;cursor:pointer;transition:background .15s,transform .15s}.toggle:hover:not(:disabled){background:#173c28;transform:translateY(-1px)}.toggle:disabled{opacity:.5;cursor:wait}.toggle[data-mode=disable]{background:#f3f0e8;color:#69522b;border:1px solid #e4ddcb}.toggle[data-mode=disable]:hover:not(:disabled){background:#ebe4d5}.toggle:focus-visible,.refresh:focus-visible{outline:3px solid #7a9d53;outline-offset:4px}.feedback{font-size:12px;line-height:1.6;margin:14px 0 0;color:#586c5a;min-height:20px}.feedback[data-error=true]{color:#a3332d}.card-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:18px;margin-top:10px;border-top:1px solid #edf0e9;color:#8a948a;font-size:10px}.refresh{padding:7px 0 7px 10px;font:inherit;font-weight:600;color:#47644d;background:none;border:0;cursor:pointer}.refresh:disabled{opacity:.5;cursor:wait}.explanation{display:flex;gap:13px;margin:28px 8px}.explanation>span{font-size:22px;color:#78916e}.explanation h2{font-size:12px;font-weight:650;margin:3px 0 6px}.explanation p{font-size:11px;color:#748073;line-height:1.8;margin:0}.footer{text-align:center;margin-top:45px;font-size:10px;font-weight:700;letter-spacing:2px;color:#73836f}.footer>span{padding:0 8px;color:#b0bcaa}.footer p{font-size:10px;letter-spacing:0;font-weight:400;color:#8a9585;margin-top:14px}.badge[data-active=true]{color:#316043;background:#eaf3e8}.badge[data-active=false]{color:#84602c;background:#f5efdf}#avatar-dot[data-active=true]{background:#5e9b53}#avatar-dot[data-active=false]{background:#c69c4d}@media(max-width:420px){.panel{padding:25px 19px}.intro{margin-top:46px}.control{padding:22px}.private-label{font-size:9px}.control-top{gap:10px}.control-top p{font-size:10px}.badge{font-size:9px;padding:6px 8px}.card-footer{font-size:9px}}@media(prefers-reduced-motion:reduce){.toggle{transition:none}}
 .toggle{font-family:inherit;font-size:14px;font-weight:600}
+
+/* M7 identity: graphite surfaces with violet and blue accents.
+   State colors remain semantic; this theme does not change control behavior. */
+:root{color-scheme:dark;color:#fafafa;background:#09090b;--m7-purple:#a855f7;--m7-blue:#3b82f6;--m7-muted:#a1a1aa;--m7-border:#303039}
+body{background:radial-gradient(ellipse at 10% 0%,#a855f71a 0%,transparent 50%),radial-gradient(ellipse at 100% 40%,#3b82f612 0%,transparent 55%),#09090b}
+.brand>div>span,.intro>p:last-child,.control-top p,.status-block p,.explanation p{color:var(--m7-muted)}
+.brand-mark{background:linear-gradient(135deg,#a21caf,#2563eb);color:#fff}
+.private-label{border-color:var(--m7-border);color:#d4d4d8;background:#18181b}
+.eyebrow{color:#c084fc}
+.control{background:#18181b;border-color:var(--m7-border);box-shadow:0 16px 50px -24px #0009}
+.avatar{background:#a855f71f;color:#d8b4fe}
+.avatar span{background:#71717a;border-color:#18181b}
+.badge{background:#27272a;color:#d4d4d8}
+.status-block,.card-footer{border-color:var(--m7-border)}
+.toggle{background:linear-gradient(110deg,#9333ea,#2563eb);color:#fff}
+.toggle:hover:not(:disabled){background:linear-gradient(110deg,#7e22ce,#1d4ed8)}
+.toggle[data-mode=disable]{background:#27272a;color:#e4e4e7;border-color:#52525b}
+.toggle[data-mode=disable]:hover:not(:disabled){background:#3f3f46}
+.toggle:focus-visible,.refresh:focus-visible{outline-color:#c084fc}
+.feedback{color:#d4d4d8}
+.feedback[data-error=true]{color:#fca5a5}
+.card-footer,.footer,.footer p{color:var(--m7-muted)}
+.refresh{color:#93c5fd}
+.explanation>span{color:#c084fc}
+.footer>span{color:#71717a}
+.badge[data-active=true]{color:#86efac;background:#14532d66}
+.badge[data-active=false]{color:#fcd34d;background:#78350f66}
+#avatar-dot[data-active=true]{background:#4ade80}
+#avatar-dot[data-active=false]{background:#fbbf24}
