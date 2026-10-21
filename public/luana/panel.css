@@ -29,3 +29,11 @@ body{background:radial-gradient(ellipse at 10% 0%,#a855f71a 0%,transparent 50%),
 .badge[data-active=false]{color:#fcd34d;background:#78350f66}
 #avatar-dot[data-active=true]{background:#4ade80}
 #avatar-dot[data-active=false]{background:#fbbf24}
+
+.canel-identity{display:flex;flex-direction:column;align-items:center;gap:6px}
+.canel-logo{display:block;width:174px;height:auto;padding:7px 9px;background:#fff;border-radius:8px}
+.brand>.canel-identity>span{font-size:9px;letter-spacing:1.8px}
+.footer .powered-by{display:block;padding:0;color:var(--m7-muted);font-size:9px;font-weight:500;letter-spacing:1.8px;text-transform:uppercase}
+.m7-logo-frame{position:relative;overflow:hidden;width:206px;height:54px;margin:10px auto 0;border-radius:8px;background:#1b1c11}
+.m7-logo{position:absolute;left:50%;top:50%;width:480px;height:270px;max-width:none;transform:translate(-50%,-50%)}
+@media(max-width:420px){.canel-logo{width:150px}.brand{gap:8px}.private-label{padding:7px 9px}}
