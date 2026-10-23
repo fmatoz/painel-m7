@@ -110,7 +110,7 @@ const stages: { id: Stage; label: string; color: string }[] = [
   { id: "proposta", label: "Proposta", color: "bg-orange-400" },
   { id: "cliente", label: "Cliente", color: "bg-emerald-400" },
   { id: "congelado", label: "Congelado", color: "bg-slate-400" },
-  { id: "perdido", label: "Perdido", color: "bg-zinc-500" },
+  { id: "perdido", label: "Não tem interesse", color: "bg-zinc-500" },
   { id: "fora_do_perfil", label: "Fora do perfil", color: "bg-rose-400" },
 ];
 

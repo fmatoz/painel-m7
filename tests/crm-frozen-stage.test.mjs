@@ -9,6 +9,11 @@ const migration = read("supabase/migrations/20261001120000_add_crm_frozen_stage.
 const stages = [...crm.matchAll(/\{ id: "([^"]+)", label: "([^"]+)", color: "([^"]+)" \}/g)];
 const expected = ["novo", "primeiro_contato", "respondeu", "follow_up", "reuniao", "proposta", "cliente", "congelado", "perdido", "fora_do_perfil"];
 
+test("Não tem interesse keeps the existing perdido stage and position", () => {
+  assert.equal(stages[8][1], "perdido");
+  assert.equal(stages[8][2], "Não tem interesse");
+});
+
 test("Congelado follows Cliente and preserves every existing stage", () => {
   assert.deepEqual(stages.map((match) => match[1]), expected);
   assert.equal(stages[7][2], "Congelado");
