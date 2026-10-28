@@ -1,0 +1,31 @@
+{
+  "name": "Exigir pedido de sincronização",
+  "type": "n8n-nodes-base.filter",
+  "typeVersion": 2.3,
+  "position": [
+    400,
+    0
+  ],
+  "parameters": {
+    "conditions": {
+      "options": {
+        "caseSensitive": true,
+        "leftValue": "",
+        "typeValidation": "strict",
+        "version": 2
+      },
+      "conditions": [
+        {
+          "leftValue": "={{ typeof $json.command_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test($json.command_id) }}",
+          "rightValue": true,
+          "operator": {
+            "type": "boolean",
+            "operation": "equals"
+          }
+        }
+      ],
+      "combinator": "and"
+    },
+    "options": {}
+  }
+}
