@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { localDate, localDateTime, nextActionInDays } from "@/lib/crm-dates";
+import { moveLeadBatch } from "@/lib/crm-bulk-move";
 import { isLeadAssignee, leadAssignees, leadAssigneeNames, type AssignmentMode } from "@/lib/crm-assignment";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -412,6 +413,9 @@ function CrmComponent() {
   const [assignee, setAssignee] = useState("all");
   const [websiteFilter, setWebsiteFilter] = useState<WebsiteFilter>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStage, setBulkStage] = useState("");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, session, loading, signOut } = useAuth();
@@ -577,6 +581,34 @@ function CrmComponent() {
     return [...people.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
   }, [leadsQuery.data]);
 
+  // Hidden/deleted cards cannot be moved accidentally after a filter change.
+  const visibleSelectedIds = filtered.filter((lead) => selectedIds.has(lead.id)).map((lead) => lead.id);
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [search, source, assignee, websiteFilter]);
+
+  const bulkMove = useMutation({
+    mutationFn: ({ ids, stage }: { ids: string[]; stage: string }) =>
+      moveLeadBatch(ids, (id) => crmApi<Lead>(session!.access_token, {
+        action: "update", leadId: id, changes: { stage },
+      })),
+    onSuccess: ({ succeeded, failed }) => {
+      setSelectedIds((current) => new Set([...current].filter((id) => !succeeded.includes(id))));
+      if (succeeded.length) toast.success(`${succeeded.length} lead(s) movido(s).`);
+      if (failed.length) toast.error(`${failed.length} lead(s) não foram movidos. Permanecem selecionados para tentar novamente.`);
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
+    },
+  });
+
+  const toggleLeadSelection = (id: string) => {
+    if (bulkMove.isPending) return;
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   if (loading || access.loading || !session || !access.can("crm"))
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
@@ -618,7 +650,7 @@ function CrmComponent() {
               <h2 className="text-2xl font-bold">Pipeline comercial</h2>
               <p className="text-sm text-zinc-400">Arraste um card para atualizar sua etapa.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <fieldset disabled={bulkMove.isPending} className="flex flex-wrap gap-2">
               <div className="relative min-w-64 flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
                 <Input
@@ -676,8 +708,39 @@ function CrmComponent() {
                 />
                 Sincronizar leads
               </Button>
-            </div>
+              <Button variant="outline" disabled={bulkMove.isPending}
+                aria-pressed={selectionMode}
+                onClick={() => {
+                  setSelectionMode(!selectionMode);
+                  setSelectedIds(new Set());
+                  setBulkStage("");
+                }}>
+                {selectionMode ? "Cancelar seleção" : "Selecionar Leads"}
+              </Button>
+            </fieldset>
           </div>
+
+          {selectionMode && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3" aria-busy={bulkMove.isPending}>
+              <span aria-live="polite" className="text-sm">{visibleSelectedIds.length} lead(s) selecionado(s)</span>
+              <Button variant="outline" size="sm" disabled={bulkMove.isPending || !filtered.length}
+                onClick={() => setSelectedIds(new Set(filtered.map((lead) => lead.id)))}>
+                Selecionar todos os filtrados
+              </Button>
+              <Button variant="ghost" size="sm" disabled={bulkMove.isPending || !selectedIds.size}
+                onClick={() => setSelectedIds(new Set())}>Limpar seleção</Button>
+              <select aria-label="Etapa de destino" value={bulkStage} disabled={bulkMove.isPending}
+                onChange={(e) => setBulkStage(e.target.value)}
+                className="h-9 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm">
+                <option value="">Mover para...</option>
+                {stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}
+              </select>
+              <Button disabled={bulkMove.isPending || !visibleSelectedIds.length || !bulkStage}
+                onClick={() => bulkMove.mutate({ ids: visibleSelectedIds, stage: bulkStage })}>
+                {bulkMove.isPending ? "Movendo..." : `Mover ${visibleSelectedIds.length} lead(s)`}
+              </Button>
+            </div>
+          )}
 
           {leadsQuery.isLoading ? (
             <div className="flex h-80 items-center justify-center">
@@ -719,6 +782,7 @@ function CrmComponent() {
                     key={column.key}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
+                      if (selectionMode) return;
                       const id = e.dataTransfer.getData("text/lead-id");
                       if (id) updateLead.mutate({ id, changes: { stage: column.stage } });
                     }}
@@ -737,7 +801,9 @@ function CrmComponent() {
                     </div>
                     <div className="space-y-2">
                       {stageLeads.map((lead) => (
-                        <LeadCard key={lead.id} lead={lead} onOpen={() => setSelected(lead)} />
+                        <LeadCard key={lead.id} lead={lead} onOpen={() => setSelected(lead)}
+                          selectionMode={selectionMode} checked={selectedIds.has(lead.id)}
+                          selectionDisabled={bulkMove.isPending} onToggle={() => toggleLeadSelection(lead.id)} />
                       ))}
                     </div>
                   </section>
@@ -787,7 +853,10 @@ function Nav({
   );
 }
 
-function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
+function LeadCard({ lead, onOpen, selectionMode = false, checked = false, selectionDisabled = false, onToggle }: {
+  lead: Lead; onOpen: () => void; selectionMode?: boolean; checked?: boolean;
+  selectionDisabled?: boolean; onToggle?: () => void;
+}) {
   const lastModified = new Date(lead.last_touched_at ?? lead.created_at);
   const hasLastModified = Number.isFinite(lastModified.getTime());
   const mapsOnly = lead.source === "Maps";
@@ -808,20 +877,28 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
   const service = suggestedService(lead);
   return (
     <div
-      role="button"
+      role={selectionMode ? "checkbox" : "button"}
+      aria-checked={selectionMode ? checked : undefined}
+      aria-disabled={selectionMode ? selectionDisabled : undefined}
+      aria-label={selectionMode ? `Selecionar ${lead.company_name}` : undefined}
       tabIndex={0}
-      draggable
+      draggable={!selectionMode}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/lead-id", lead.id);
         e.dataTransfer.effectAllowed = "move";
       }}
-      onClick={onOpen}
+      onClick={selectionMode ? onToggle : onOpen}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onOpen();
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (selectionMode) onToggle?.(); else onOpen();
+        }
       }}
-      className={`w-full cursor-grab rounded-lg border border-l-4 border-zinc-700 bg-zinc-950 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-600 ${sourceStyle[lead.source] ?? "border-l-zinc-500"}`}
+      className={`w-full cursor-pointer rounded-lg border border-l-4 border-zinc-700 bg-zinc-950 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-600 ${selectionMode && checked ? "ring-2 ring-blue-500" : ""} ${sourceStyle[lead.source] ?? "border-l-zinc-500"}`}
     >
       <div className="flex items-start gap-2">
+        {selectionMode && <input type="checkbox" checked={checked} readOnly tabIndex={-1}
+          aria-hidden="true" disabled={selectionDisabled} className="pointer-events-none mt-1 h-4 w-4 shrink-0 accent-blue-600" />}
         <p className="line-clamp-2 flex-1 text-sm font-semibold">{lead.company_name}</p>
         {lead.instagram_url && (
           <span title="Instagram encontrado" className="mt-1 text-pink-300">
