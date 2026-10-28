@@ -4,6 +4,8 @@ access_check AS (
 ),
 updated AS (
   UPDATE public.crm_leads l SET
+    last_message_on = CASE WHEN (SELECT data->'changes' ? 'last_message_on' FROM p)
+      THEN NULLIF((SELECT data->'changes'->>'last_message_on' FROM p),'')::date ELSE l.last_message_on END,
     stage = CASE
       WHEN (SELECT data->>'action' FROM p)='update'
        AND (SELECT data->'changes'->>'stage' FROM p) IN ('novo','primeiro_contato','respondeu','follow_up','reuniao','proposta','cliente','congelado','perdido','fora_do_perfil')

@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { localDate, localDateTime, nextActionInDays } from "@/lib/crm-dates";
 import { isLeadAssignee, leadAssignees, leadAssigneeNames, type AssignmentMode } from "@/lib/crm-assignment";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -1003,8 +1004,28 @@ function LeadDialog({
         {lead && (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-3 pr-8 text-xl">
-                {lead.company_name}
+              <DialogTitle className="flex flex-wrap items-center gap-3 pr-8 text-xl">
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <span>{lead.company_name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    title="Copiar nome do negócio"
+                    aria-label="Copiar nome do negócio"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(lead.company_name);
+                        toast.success("Nome do negócio copiado.");
+                      } catch {
+                        toast.error("Não foi possível copiar o nome.");
+                      }
+                    }}
+                  >
+                    <Clipboard className="h-4 w-4" />
+                  </Button>
+                </span>
                 <span className="rounded-lg bg-blue-500/15 px-2.5 py-1 text-sm text-blue-300">
                   Nota {Number(lead.score).toFixed(1)}
                 </span>
@@ -1443,21 +1464,36 @@ function LeadDialog({
                         className="mt-1 border-zinc-700 bg-zinc-950"
                       />
                     </label>
-                    <label className="block text-xs text-zinc-400">
-                      Próxima ação
+                    <div className="space-y-1 text-xs text-zinc-400">
+                      <label htmlFor="crm-last-message">Última Mensagem Enviada</label>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm"
+                          onClick={() => field("last_message_on", localDate())}>
+                          Hoje
+                        </Button>
+                      </div>
                       <Input
-                        value={String(draft.next_action ?? "")}
-                        onChange={(e) => field("next_action", e.target.value)}
+                        id="crm-last-message"
+                        type="date"
+                        value={String(draft.last_message_on ?? "")}
+                        onChange={(e) => field("last_message_on", e.target.value || null)}
                         className="mt-1 border-zinc-700 bg-zinc-950"
                       />
-                    </label>
-                    <label className="block text-xs text-zinc-400">
-                      Data da próxima ação
+                    </div>
+                    <div className="space-y-1 text-xs text-zinc-400">
+                      <label htmlFor="crm-next-action">Data da próxima ação</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[3, 7, 14].map((days) => (
+                          <Button key={days} type="button" variant="outline" size="sm"
+                            onClick={() => field("next_action_at", nextActionInDays(days))}>
+                            Em {days} dias
+                          </Button>
+                        ))}
+                      </div>
                       <Input
+                        id="crm-next-action"
                         type="datetime-local"
-                        value={
-                          draft.next_action_at ? String(draft.next_action_at).slice(0, 16) : ""
-                        }
+                        value={localDateTime(draft.next_action_at)}
                         onChange={(e) =>
                           field(
                             "next_action_at",
@@ -1466,7 +1502,7 @@ function LeadDialog({
                         }
                         className="mt-1 border-zinc-700 bg-zinc-950"
                       />
-                    </label>
+                    </div>
                     <label className="block text-xs text-zinc-400">
                       Anotações
                       <Textarea
@@ -1544,7 +1580,7 @@ function LeadDialog({
                       onSave({
                         stage: draft.stage,
                         service_interest: draft.service_interest,
-                        next_action: draft.next_action,
+                        last_message_on: draft.last_message_on,
                         next_action_at: draft.next_action_at,
                         instagram_url: draft.instagram_url,
                         facebook_url: draft.facebook_url,
