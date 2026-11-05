@@ -4,6 +4,8 @@ access_check AS (
 ),
 updated AS (
   UPDATE public.crm_leads l SET
+    follow_up_count = CASE WHEN (SELECT data->'changes' ? 'follow_up_count' FROM p)
+      THEN (SELECT data->'changes'->>'follow_up_count' FROM p)::smallint ELSE l.follow_up_count END,
     last_message_on = CASE WHEN (SELECT data->'changes' ? 'last_message_on' FROM p)
       THEN NULLIF((SELECT data->'changes'->>'last_message_on' FROM p),'')::date ELSE l.last_message_on END,
     stage = CASE

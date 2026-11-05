@@ -1557,6 +1557,20 @@ function LeadDialog({
                         className="mt-1 border-zinc-700 bg-zinc-950"
                       />
                     </div>
+                    <fieldset className="space-y-1 text-xs text-zinc-400">
+                      <legend>Follow-ups realizados</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {[1, 2, 3].map((count) => (
+                          <Button key={count} type="button" size="sm"
+                            variant={draft.follow_up_count === count ? "default" : "outline"}
+                            aria-pressed={draft.follow_up_count === count}
+                            onClick={() => field("follow_up_count", count)}>{count}</Button>
+                        ))}
+                        <Button type="button" size="sm" variant="ghost"
+                          disabled={!draft.follow_up_count}
+                          onClick={() => field("follow_up_count", 0)}>Limpar</Button>
+                      </div>
+                    </fieldset>
                     <div className="space-y-1 text-xs text-zinc-400">
                       <label htmlFor="crm-next-action">Data da próxima ação</label>
                       <div className="flex flex-wrap gap-2">
@@ -1658,6 +1672,7 @@ function LeadDialog({
                         stage: draft.stage,
                         service_interest: draft.service_interest,
                         last_message_on: draft.last_message_on,
+                        follow_up_count: draft.follow_up_count ?? 0,
                         next_action_at: draft.next_action_at,
                         instagram_url: draft.instagram_url,
                         facebook_url: draft.facebook_url,
