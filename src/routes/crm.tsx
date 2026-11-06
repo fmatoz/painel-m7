@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowUp,
+  ArrowDown,
   AtSign,
   Building2,
   CalendarClock,
@@ -571,6 +573,35 @@ function CrmComponent() {
     });
   }, [leadsQuery.data, search, source, assignee, websiteFilter, user?.id]);
 
+  const columnLeads = useMemo(() => pipelineColumns.map((column) => {
+    return filtered
+      .filter((lead) => {
+        if (lead.stage !== column.stage) return false;
+        if (column.sourceGroup === "maps") {
+          return lead.source === "Maps" || lead.source === "Maps + CNPJ";
+        }
+        if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
+        return true;
+      })
+      .sort((a, b) => {
+        const touchedDifference =
+          new Date(b.last_touched_at ?? b.created_at).getTime() -
+          new Date(a.last_touched_at ?? a.created_at).getTime();
+        if (touchedDifference !== 0) return touchedDifference;
+
+        const scoreDifference = Number(b.score) - Number(a.score);
+        if (scoreDifference !== 0) return scoreDifference;
+
+        const createdDifference =
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        if (createdDifference !== 0) return createdDifference;
+
+        return a.id.localeCompare(b.id);
+      });
+  }), [filtered]);
+  const selectedColumn = columnLeads.find((items) => items.some((item) => item.id === selected?.id)) ?? [];
+  const selectedIndex = selectedColumn.findIndex((item) => item.id === selected?.id);
+
   const assignees = useMemo(() => {
     const people = new Map<string, string>();
     for (const lead of leadsQuery.data ?? []) {
@@ -752,31 +783,8 @@ function CrmComponent() {
             </div>
           ) : (
             <div className="grid min-w-[2360px] grid-cols-9 gap-3 pb-4">
-              {pipelineColumns.map((column) => {
-                const stageLeads = filtered
-                  .filter((lead) => {
-                    if (lead.stage !== column.stage) return false;
-                    if (column.sourceGroup === "maps") {
-                      return lead.source === "Maps" || lead.source === "Maps + CNPJ";
-                    }
-                    if (column.sourceGroup === "cnpj") return lead.source === "CNPJ";
-                    return true;
-                  })
-                  .sort((a, b) => {
-                    const touchedDifference =
-                      new Date(b.last_touched_at ?? b.created_at).getTime() -
-                      new Date(a.last_touched_at ?? a.created_at).getTime();
-                    if (touchedDifference !== 0) return touchedDifference;
-
-                    const scoreDifference = Number(b.score) - Number(a.score);
-                    if (scoreDifference !== 0) return scoreDifference;
-
-                    const createdDifference =
-                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-                    if (createdDifference !== 0) return createdDifference;
-
-                    return a.id.localeCompare(b.id);
-                  });
+              {pipelineColumns.map((column, columnIndex) => {
+                const stageLeads = columnLeads[columnIndex];
                 return (
                   <section
                     key={column.key}
@@ -816,6 +824,9 @@ function CrmComponent() {
 
       <LeadDialog
         lead={selected}
+        previousLead={selectedColumn[selectedIndex - 1]}
+        nextLead={selectedColumn[selectedIndex + 1]}
+        onNavigate={setSelected}
         onClose={() => setSelected(null)}
         onSave={(changes) => selected && updateLead.mutate({ id: selected.id, changes })}
         onSend={() => selected && sendLead.mutate(selected)}
@@ -1019,6 +1030,9 @@ function LeadCard({ lead, onOpen, selectionMode = false, checked = false, select
 
 function LeadDialog({
   lead,
+  previousLead,
+  nextLead,
+  onNavigate,
   onClose,
   onSave,
   onSend,
@@ -1031,6 +1045,9 @@ function LeadDialog({
   accessToken,
 }: {
   lead: Lead | null;
+  previousLead?: Lead;
+  nextLead?: Lead;
+  onNavigate: (lead: Lead) => void;
   onClose: () => void;
   onSave: (changes: Partial<Lead>) => void;
   onSend: () => void;
@@ -1056,10 +1073,13 @@ function LeadDialog({
     setDraft(lead ?? {});
     setSelectedMaterial(null);
     setFavoriteMaterialIds(readFavoriteMaterialIds(currentUserId));
+    setActivities([]);
+    let active = true;
     if (!lead) return;
     void crmApi<Activity[]>(accessToken, { action: "activities", leadId: lead.id })
-      .then((data) => setActivities(data ?? []))
-      .catch(() => setActivities([]));
+      .then((data) => { if (active) setActivities(data ?? []); })
+      .catch(() => { if (active) setActivities([]); });
+    return () => { active = false; };
   }, [lead, accessToken, currentUserId]);
   const favoriteMaterials = useMemo(() => {
     const favorites = new Set(favoriteMaterialIds);
@@ -1069,6 +1089,13 @@ function LeadDialog({
   }, [favoriteMaterialIds, materialsQuery.data]);
   const field = (key: keyof Lead, value: unknown) =>
     setDraft((current) => ({ ...current, [key]: value }));
+  const navigateToLead = (target?: Lead) => {
+    if (!target || saving || sending || assigning) return;
+    const changed = Object.keys(draft).some((key) =>
+      JSON.stringify(draft[key as keyof Lead]) !== JSON.stringify(lead?.[key as keyof Lead]));
+    if (changed && !window.confirm("Há alterações não salvas. Descartar e abrir o outro lead?")) return;
+    onNavigate(target);
+  };
   const radar = radarM7(draft);
   const service = suggestedService(draft);
   return (
@@ -1081,6 +1108,20 @@ function LeadDialog({
         {lead && (
           <>
             <DialogHeader>
+              <div className="flex items-center gap-2 pr-8">
+                <Button type="button" variant="outline" size="sm"
+                  title="Abrir card de cima" aria-label="Abrir card de cima"
+                  disabled={!previousLead || saving || sending || assigning}
+                  onClick={() => navigateToLead(previousLead)}>
+                  <ArrowUp className="mr-1 h-4 w-4" /> Anterior
+                </Button>
+                <Button type="button" variant="outline" size="sm"
+                  title="Abrir card de baixo" aria-label="Abrir card de baixo"
+                  disabled={!nextLead || saving || sending || assigning}
+                  onClick={() => navigateToLead(nextLead)}>
+                  Próximo <ArrowDown className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
               <DialogTitle className="flex flex-wrap items-center gap-3 pr-8 text-xl">
                 <span className="inline-flex min-w-0 items-center gap-2">
                   <span>{lead.company_name}</span>
