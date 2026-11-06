@@ -1106,18 +1106,18 @@ function LeadDialog({
         }`}
       >
         <Button type="button" variant="outline" size="icon"
-          className="absolute -left-11 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full shadow-lg"
+          className="absolute -left-12 top-1/2 h-11 w-11 -translate-y-1/2 rounded-full shadow-lg"
           title="Card anterior (acima)" aria-label="Abrir card anterior, acima no pipeline"
           disabled={!previousLead || saving || sending || assigning}
           onClick={() => navigateToLead(previousLead)}>
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="!h-7 !w-7" />
         </Button>
         <Button type="button" variant="outline" size="icon"
-          className="absolute -right-11 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full shadow-lg"
+          className="absolute -right-12 top-1/2 h-11 w-11 -translate-y-1/2 rounded-full shadow-lg"
           title="Próximo card (abaixo)" aria-label="Abrir próximo card, abaixo no pipeline"
           disabled={!nextLead || saving || sending || assigning}
           onClick={() => navigateToLead(nextLead)}>
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="!h-7 !w-7" />
         </Button>
         <div className="max-h-[92vh] min-w-0 overflow-y-auto rounded-lg p-6">
         {lead && (
