@@ -422,6 +422,39 @@ function CrmComponent() {
   const queryClient = useQueryClient();
   const { user, session, loading, signOut } = useAuth();
   const access = useAppAccess();
+  const [restoredFiltersFor, setRestoredFiltersFor] = useState<string | null>(null);
+  const filterStorageKey = user?.id ? `m7:crm-filters:v1:${user.id}` : null;
+
+  useEffect(() => {
+    if (!filterStorageKey) {
+      setRestoredFiltersFor(null);
+      return;
+    }
+    let saved: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(filterStorageKey) ?? "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        saved = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Keep the pipeline usable when browser storage is unavailable.
+    }
+    setSearch(typeof saved.search === "string" ? saved.search : "");
+    setSource(typeof saved.source === "string" && ["Todos", "Maps", "CNPJ", "Maps + CNPJ"].includes(saved.source)
+      ? saved.source : "Todos");
+    setAssignee(typeof saved.assignee === "string" && saved.assignee ? saved.assignee : "all");
+    setWebsiteFilter(saved.websiteFilter === "with" || saved.websiteFilter === "without" ? saved.websiteFilter : "all");
+    setRestoredFiltersFor(filterStorageKey);
+  }, [filterStorageKey]);
+
+  useEffect(() => {
+    if (!filterStorageKey || restoredFiltersFor !== filterStorageKey) return;
+    try {
+      localStorage.setItem(filterStorageKey, JSON.stringify({ search, source, assignee, websiteFilter }));
+    } catch {
+      // Filtering still works if the browser blocks saving preferences.
+    }
+  }, [filterStorageKey, restoredFiltersFor, search, source, assignee, websiteFilter]);
 
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/login", search: {} as never });
