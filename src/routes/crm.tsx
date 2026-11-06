@@ -2,8 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUp,
-  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
   AtSign,
   Building2,
   CalendarClock,
@@ -1101,27 +1101,28 @@ function LeadDialog({
   return (
     <Dialog open={!!lead} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className={`max-h-[92vh] overflow-y-auto border-zinc-700 bg-zinc-900 text-white ${
+        className={`w-[calc(100%-6rem)] max-h-[92vh] overflow-visible gap-0 p-0 border-zinc-700 bg-zinc-900 text-white ${
           selectedMaterial ? "sm:max-w-6xl" : "sm:max-w-3xl"
         }`}
       >
+        <Button type="button" variant="outline" size="icon"
+          className="absolute -left-11 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full shadow-lg"
+          title="Card anterior (acima)" aria-label="Abrir card anterior, acima no pipeline"
+          disabled={!previousLead || saving || sending || assigning}
+          onClick={() => navigateToLead(previousLead)}>
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <Button type="button" variant="outline" size="icon"
+          className="absolute -right-11 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full shadow-lg"
+          title="Próximo card (abaixo)" aria-label="Abrir próximo card, abaixo no pipeline"
+          disabled={!nextLead || saving || sending || assigning}
+          onClick={() => navigateToLead(nextLead)}>
+          <ChevronRight className="h-5 w-5" />
+        </Button>
+        <div className="max-h-[92vh] min-w-0 overflow-y-auto rounded-lg p-6">
         {lead && (
           <>
             <DialogHeader>
-              <div className="flex items-center gap-2 pr-8">
-                <Button type="button" variant="outline" size="sm"
-                  title="Abrir card de cima" aria-label="Abrir card de cima"
-                  disabled={!previousLead || saving || sending || assigning}
-                  onClick={() => navigateToLead(previousLead)}>
-                  <ArrowUp className="mr-1 h-4 w-4" /> Anterior
-                </Button>
-                <Button type="button" variant="outline" size="sm"
-                  title="Abrir card de baixo" aria-label="Abrir card de baixo"
-                  disabled={!nextLead || saving || sending || assigning}
-                  onClick={() => navigateToLead(nextLead)}>
-                  Próximo <ArrowDown className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
               <DialogTitle className="flex flex-wrap items-center gap-3 pr-8 text-xl">
                 <span className="inline-flex min-w-0 items-center gap-2">
                   <span>{lead.company_name}</span>
@@ -1817,6 +1818,7 @@ function LeadDialog({
             </div>
           </>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );
