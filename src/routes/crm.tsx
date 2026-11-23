@@ -35,6 +35,7 @@ import { moveLeadBatch } from "@/lib/crm-bulk-move";
 import { isLeadAssignee, leadAssignees, leadAssigneeNames, type AssignmentMode } from "@/lib/crm-assignment";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { CrmPresence } from "@/components/crm-presence";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Dialog,
@@ -712,6 +713,7 @@ function CrmComponent() {
           <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h2 className="text-2xl font-bold">Pipeline comercial</h2>
+              {user && access.can("crm") && <CrmPresence userId={user.id} name={access.profile?.full_name || "Usuário"} />}
               <p className="text-sm text-zinc-400">Arraste um card para atualizar sua etapa.</p>
             </div>
             <fieldset disabled={bulkMove.isPending} className="flex flex-wrap gap-2">
