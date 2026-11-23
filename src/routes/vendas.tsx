@@ -1,3 +1,4 @@
+import { SaleToFinance } from "@/components/sale-to-finance";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -593,6 +594,7 @@ function SalesComponent() {
                             </div>
                           </div>
                           <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                            {isAdmin && access.can("financeiro") && status !== "rejected" && <SaleToFinance sale={sale} />}
                             {isAdmin && (
                               <Button
                                 size="sm"

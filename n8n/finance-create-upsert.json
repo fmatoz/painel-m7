@@ -1,0 +1,59 @@
+{
+  "operation": "appendOrUpdate",
+  "documentId": {
+    "__rl": true,
+    "value": "12gjHkWbtZxl6S3MsEq1rFw19T1WK0xqmCcFrBI5HmcE",
+    "mode": "id"
+  },
+  "sheetName": {
+    "__rl": true,
+    "value": "Lancamentos",
+    "mode": "name"
+  },
+  "columns": {
+    "mappingMode": "autoMapInputData",
+    "value": {
+      "id": "={{ $json.id }}",
+      "tipo": "={{ $json.tipo }}",
+      "descricao": "={{ $json.descricao }}",
+      "cliente_id": "={{ $json.cliente_id }}",
+      "cliente_nome": "={{ $json.cliente_nome }}",
+      "servico_id": "={{ $json.servico_id }}",
+      "servico_nome": "={{ $json.servico_nome }}",
+      "modalidade": "={{ $json.modalidade }}",
+      "competencia": "={{ $json.competencia }}",
+      "competencia_ym": "={{ $json.competencia_ym }}",
+      "vencimento": "={{ $json.vencimento }}",
+      "pagamento": "={{ $json.pagamento }}",
+      "status": "={{ $json.status }}",
+      "valor_previsto": "={{ $json.valor_previsto }}",
+      "valor_realizado": "={{ $json.valor_realizado }}",
+      "parcela_atual": "={{ $json.parcela_atual }}",
+      "total_parcelas": "={{ $json.total_parcelas }}",
+      "conta": "={{ $json.conta }}",
+      "forma_pagamento": "={{ $json.forma_pagamento }}",
+      "origem": "={{ $json.origem }}",
+      "observacoes": "={{ $json.observacoes }}",
+      "criado_em": "={{ $json.criado_em }}",
+      "atualizado_em": "={{ $json.atualizado_em }}"
+    },
+    "matchingColumns": [
+      "id"
+    ],
+    "schema": [
+      {
+        "required": false,
+        "canBeUsedToMatch": true,
+        "type": "string",
+        "displayName": "id",
+        "defaultMatch": true,
+        "id": "id",
+        "display": true
+      }
+    ],
+    "attemptToConvertTypes": false,
+    "convertFieldsToString": false
+  },
+  "options": {},
+  "handlingExtraData": "ignoreIt"
+}
