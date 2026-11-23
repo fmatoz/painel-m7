@@ -44,7 +44,7 @@ export function CrmPresence({ userId, name }: { userId: string; name: string }) 
     const events = ["pointerdown", "pointermove", "keydown", "scroll", "touchstart"] as const;
     events.forEach((event) => window.addEventListener(event, activity, { passive: true, capture: true }));
     document.addEventListener("visibilitychange", visibility);
-    const timer = window.setInterval(publish, 15_000);
+    const timer = window.setInterval(publish, 60_000);
     return () => {
       stopped = true;
       window.clearInterval(timer);
