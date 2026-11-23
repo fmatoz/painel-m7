@@ -52,25 +52,25 @@ export function SaleToFinance({ sale }: { sale: Sale }) {
       {sent ? "Enviada ao Financeiro" : "Enviar ao Financeiro"}
     </Button>
     <Dialog open={open} onOpenChange={(value) => { if (!transfer.isPending) setOpen(value); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Lançar venda no Financeiro</DialogTitle>
-          <DialogDescription>Confira os dados. Será criada uma receita única, sem recorrência.</DialogDescription>
+      <DialogContent className="max-w-md border-zinc-700 bg-zinc-900 text-zinc-100">
+        <DialogHeader><DialogTitle className="text-zinc-100">Lançar venda no Financeiro</DialogTitle>
+          <DialogDescription className="text-zinc-400">Confira os dados. Será criada uma receita única, sem recorrência.</DialogDescription>
         </DialogHeader>
         <p className="font-medium">{sale.client_name}</p>
         <p>{sale.service} · {Number(sale.sale_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         {sale.notes && <p className="whitespace-pre-wrap text-sm">{sale.notes}</p>}
-        <label className="space-y-1 text-sm">{received ? "Vencimento / data do recebimento" : "Vencimento"}
-          <Input type="date" value={due} disabled={transfer.isPending} onChange={(e) => setDue(e.target.value)} />
+        <label className="space-y-1 text-sm text-zinc-300">{received ? "Vencimento / data do recebimento" : "Vencimento"}
+          <Input className="border-zinc-700 bg-zinc-950 text-zinc-100 [color-scheme:dark]" type="date" value={due} disabled={transfer.isPending} onChange={(e) => setDue(e.target.value)} />
         </label>
-        <label className="space-y-1 text-sm">Situação
-          <select className="block w-full rounded border bg-background p-2" value={received ? "paid" : "pending"}
+        <label className="space-y-1 text-sm text-zinc-300">Situação
+          <select className="block w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-zinc-100 [color-scheme:dark]" value={received ? "paid" : "pending"}
             disabled={transfer.isPending} onChange={(e) => setReceived(e.target.value === "paid")}>
             <option value="pending">Pendente — a receber</option><option value="paid">Recebido integralmente</option>
           </select>
         </label>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" disabled={transfer.isPending} onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button disabled={transfer.isPending} onClick={() => transfer.mutate()}>{transfer.isPending ? "Lançando…" : "Confirmar lançamento"}</Button>
+          <Button className="text-zinc-300 hover:bg-zinc-800 hover:text-white" variant="ghost" disabled={transfer.isPending} onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button className="bg-blue-600 text-white hover:bg-blue-700" disabled={transfer.isPending} onClick={() => transfer.mutate()}>{transfer.isPending ? "Lançando…" : "Confirmar lançamento"}</Button>
         </div>
       </DialogContent>
     </Dialog>
