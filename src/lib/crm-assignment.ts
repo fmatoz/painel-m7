@@ -5,7 +5,7 @@ type Assignment = {
 };
 
 export type Assignee = { id: string; name: string };
-export type AssignmentMode = "claim" | "join" | "release" | "share";
+export type AssignmentMode = "claim" | "join" | "release" | "share" | "unshare";
 
 export function leadAssignees(lead: Assignment): Assignee[] {
   const people = new Map<string, Assignee>();
@@ -29,3 +29,5 @@ export function isLeadAssignee(lead: Assignment, userId?: string): boolean {
 export function leadAssigneeNames(lead: Assignment): string {
   return leadAssignees(lead).map((person) => person.name).join(" + ") || lead.assigned_to_name || "";
 }
+
+export const CRM_SHARE_RECIPIENT_ID = "de5f395b-64eb-45e5-9ec7-1d23aa7bc712";

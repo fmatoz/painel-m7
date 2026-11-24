@@ -32,7 +32,7 @@ import {
 import type { Tables } from "@/integrations/supabase/types";
 import { localDate, localDateTime, nextActionInDays } from "@/lib/crm-dates";
 import { moveLeadBatch } from "@/lib/crm-bulk-move";
-import { isLeadAssignee, leadAssignees, leadAssigneeNames, type AssignmentMode } from "@/lib/crm-assignment";
+import { CRM_SHARE_RECIPIENT_ID, isLeadAssignee, leadAssignees, leadAssigneeNames, type AssignmentMode } from "@/lib/crm-assignment";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { CrmPresence } from "@/components/crm-presence";
@@ -1581,16 +1581,16 @@ function LeadDialog({
                           </Button>
                         </div>
                       ) : null}
-                      {!isAdmin && isLeadAssignee(lead, currentUserId) && (
+                      {!isAdmin && lead.assigned_to === currentUserId && (
                         <div className="mt-2 space-y-2">
                           <Button
                             type="button"
                             size="sm"
-                            onClick={() => onAssign("share")}
+                            onClick={() => onAssign(leadAssignees(lead).some((person) => person.id === CRM_SHARE_RECIPIENT_ID) ? "unshare" : "share")}
                             disabled={assigning}
                             className="w-full bg-violet-600 hover:bg-violet-500"
                           >
-                            Compartilhar com Felipe
+                            {leadAssignees(lead).some((person) => person.id === CRM_SHARE_RECIPIENT_ID) ? "Desfazer compartilhamento com Felipe" : "Compartilhar com Felipe"}
                           </Button>
                           <p className="text-xs text-zinc-400">Vocês dois continuam responsáveis pelo mesmo lead.</p>
                         </div>
