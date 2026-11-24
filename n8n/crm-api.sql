@@ -2,6 +2,12 @@ WITH p AS (SELECT $1::jsonb AS data),
 access_check AS (
   SELECT COALESCE((SELECT (data->>'authorized')::boolean FROM p), false) AS allowed
 ),
+actor_context AS MATERIALIZED (
+  SELECT set_config('m7.crm_actor', jsonb_build_object(
+    'id', data->>'userId', 'name', data->>'userName')::text, true) AS context
+  FROM p WHERE COALESCE((data->>'sessionValid')::boolean,false)
+    AND (SELECT allowed FROM access_check) AND data->>'action'='update'
+),
 updated AS (
   UPDATE public.crm_leads l SET
     follow_up_count = CASE WHEN (SELECT data->'changes' ? 'follow_up_count' FROM p)
@@ -43,6 +49,7 @@ updated AS (
       ELSE l.paid_traffic_status END,
     notes = CASE WHEN (SELECT data->'changes' ? 'notes' FROM p)
       THEN left(COALESCE((SELECT data->'changes'->>'notes' FROM p),''),10000) ELSE l.notes END
+  FROM actor_context
   WHERE (SELECT allowed FROM access_check)
     AND (SELECT data->>'action' FROM p)='update'
     AND l.id=(SELECT NULLIF(data->>'leadId','')::uuid FROM p)
@@ -122,6 +129,8 @@ SELECT CASE
     THEN jsonb_build_object('ok',false,'error','Sessão inválida ou expirada.')
   WHEN NOT (SELECT allowed FROM access_check)
     THEN jsonb_build_object('ok',false,'error','Você não tem acesso ao CRM.')
+  WHEN (SELECT data->>'action' FROM p)='prospecting-summary'
+    THEN m7_private.crm_prospecting_summary((SELECT data FROM p))
   WHEN (SELECT data->>'action' FROM p)='list'
     THEN jsonb_build_object('ok',true,'data',COALESCE((SELECT jsonb_agg(to_jsonb(l) ORDER BY (l.assigned_to IS NOT NULL) DESC, l.score DESC, l.created_at ASC, l.id ASC) FROM public.crm_leads l),'[]'::jsonb))
   WHEN (SELECT data->>'action' FROM p)='activities'

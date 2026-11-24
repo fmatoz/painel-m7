@@ -32,6 +32,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { salesApi } from "@/lib/sales-api";
+import { crmApi } from "@/lib/crm-api";
+import { CrmProspectingSummary } from "@/components/crm-prospecting-summary";
 import { isLeadAssignee } from "@/lib/crm-assignment";
 import type { Json, Tables } from "@/integrations/supabase/types";
 import { Progress } from "@/components/ui/progress";
@@ -81,21 +83,6 @@ type WorkflowSummary = {
   id: string;
   active: boolean;
 };
-
-const CRM_API_URL = "https://projetopessoal-n8n.h574he.easypanel.host/webhook/m7-crm/api";
-
-async function crmApi<T>(token: string, payload: Record<string, unknown>): Promise<T> {
-  const response = await fetch(CRM_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=UTF-8" },
-    cache: "no-store",
-    body: JSON.stringify({ token, ...payload }),
-  });
-  if (!response.ok) throw new Error(`CRM indisponível (${response.status})`);
-  const result = (await response.json()) as { ok?: boolean; data?: T; error?: string };
-  if (!result.ok) throw new Error(result.error || "Não foi possível carregar o CRM.");
-  return result.data as T;
-}
 
 const money = (value: number) =>
   new Intl.NumberFormat("pt-BR", {
@@ -562,6 +549,10 @@ function InicioComponent() {
                 )}
               </div>
             </section>
+
+            {canUseCrm && user && (
+              <CrmProspectingSummary accessToken={session.access_token} userId={user.id} now={now} />
+            )}
 
             {loadError && (
               <div className="rounded-xl border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-300">

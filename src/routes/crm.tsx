@@ -529,6 +529,7 @@ function CrmComponent() {
     },
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-prospecting-summary"] });
       setSelected((current) => (current?.id === lead.id ? lead : current));
     },
     onError: () => toast.error("Não foi possível salvar a alteração."),
@@ -658,6 +659,7 @@ function CrmComponent() {
         action: "update", leadId: id, changes: { stage },
       })),
     onSuccess: ({ succeeded, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["crm-prospecting-summary"] });
       setSelectedIds((current) => new Set([...current].filter((id) => !succeeded.includes(id))));
       if (succeeded.length) toast.success(`${succeeded.length} lead(s) movido(s).`);
       if (failed.length) toast.error(`${failed.length} lead(s) não foram movidos. Permanecem selecionados para tentar novamente.`);
