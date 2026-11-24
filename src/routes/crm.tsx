@@ -1651,10 +1651,10 @@ function LeadDialog({
                     <div className="space-y-1 text-xs text-zinc-400">
                       <label htmlFor="crm-next-action">Data da próxima ação</label>
                       <div className="flex flex-wrap gap-2">
-                        {[3, 7, 14].map((days) => (
+                        {[1, 3, 7, 14].map((days) => (
                           <Button key={days} type="button" variant="outline" size="sm"
                             onClick={() => field("next_action_at", nextActionInDays(days))}>
-                            Em {days} dias
+                            Em {days} {days === 1 ? "dia" : "dias"}
                           </Button>
                         ))}
                       </div>
