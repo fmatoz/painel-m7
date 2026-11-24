@@ -1581,16 +1581,16 @@ function LeadDialog({
                           </Button>
                         </div>
                       ) : null}
-                      {!isAdmin && lead.assigned_to === currentUserId && (
+                      {!isAdmin && isLeadAssignee(lead, currentUserId) && (
                         <div className="mt-2 space-y-2">
                           <Button
                             type="button"
                             size="sm"
-                            onClick={() => onAssign(leadAssignees(lead).some((person) => person.id === CRM_SHARE_RECIPIENT_ID) ? "unshare" : "share")}
+                            onClick={() => onAssign(lead.assigned_to === currentUserId && leadAssignees(lead).some((person) => person.id === CRM_SHARE_RECIPIENT_ID) ? "unshare" : "share")}
                             disabled={assigning}
                             className="w-full bg-violet-600 hover:bg-violet-500"
                           >
-                            {leadAssignees(lead).some((person) => person.id === CRM_SHARE_RECIPIENT_ID) ? "Desfazer compartilhamento com Felipe" : "Compartilhar com Felipe"}
+                            {lead.assigned_to === currentUserId && leadAssignees(lead).some((person) => person.id === CRM_SHARE_RECIPIENT_ID) ? "Desfazer compartilhamento com Felipe" : "Compartilhar com Felipe"}
                           </Button>
                           <p className="text-xs text-zinc-400">Vocês dois continuam responsáveis pelo mesmo lead.</p>
                         </div>
