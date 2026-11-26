@@ -455,12 +455,8 @@ function Utm7() {
       )}
       <aside className={`u-sidebar ${menu ? "u-open" : ""}`}>
         <a href="/utm7" className="u-brand">
-          <span className="u-brand-mark">
-            <M7Mark />
-          </span>
           <span>
             utm<span>7</span>
-            <small>PERFORMANCE M7</small>
           </span>
         </a>
         <div className="u-workspace">
@@ -1578,10 +1574,6 @@ function Utm7() {
       </Dialog>
     </div>
   );
-}
-
-function M7Mark() {
-  return <img src="/icon-192.png" alt="Gestão M7" width={46} height={46} />;
 }
 
 function ColumnEditor({
