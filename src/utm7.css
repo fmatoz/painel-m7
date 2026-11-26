@@ -869,33 +869,31 @@
   white-space: nowrap;
   text-align: right;
   font-size: 11px;
-  width: 100%;
+  width: max-content;
 }
 .u-table th {
   background: var(--u-surface);
   border-bottom: 1px solid var(--u-line);
-  height: 46px;
+  height: 40px;
   color: var(--u-muted);
   font-size: 10px;
   font-weight: 550;
-  padding: 10px 16px;
-  min-width: 110px;
+  padding: 8px;
 }
 .u-table th > button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   white-space: nowrap;
   justify-content: flex-end;
   color: inherit;
-  min-width: 100%;
   padding: 0;
 }
 .u-table th.u-sticky > button {
   justify-content: flex-start;
 }
 .u-table td {
-  padding: 15px 16px;
+  padding: 10px 8px;
   border-bottom: 1px solid var(--u-line);
   font-variant-numeric: tabular-nums;
   color: var(--u-body);
@@ -909,8 +907,7 @@
   left: 0;
   text-align: left;
   z-index: 2;
-  min-width: 230px;
-  width: 245px;
+  max-width: 240px;
   border-right: 1px solid var(--u-line);
 }
 .u-table th.u-sticky {
@@ -1761,17 +1758,15 @@
     font-size: 10px;
   }
   .u-table .u-sticky {
-    min-width: 156px;
-    width: 156px;
+    width: auto;
     max-width: 156px;
   }
   .u-table th {
-    padding: 11px;
+    padding: 8px;
     font-size: 9px;
-    min-width: 95px;
   }
   .u-table td {
-    padding: 13px 11px;
+    padding: 10px 8px;
     font-size: 10px;
   }
   .u-entity-name {
@@ -2292,3 +2287,4 @@ body:has(.utm7-app[data-u-theme="dark"]) [data-sonner-toast][data-type="error"] 
 .u-user {
   border-color: #303549;
 }
+
