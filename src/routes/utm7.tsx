@@ -46,8 +46,7 @@ import {
 } from "recharts";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
-import { useAppAccess } from "@/hooks/use-access";
+import { useUtm7Auth, Utm7Login } from "@/hooks/use-utm7-auth";
 import { utm7Api } from "@/lib/utm7-api";
 import { bulkBudgetTargets, runBulkOperations, type BulkResult } from "@/lib/utm7-bulk.mjs";
 import {
@@ -246,8 +245,16 @@ const nav = [
 ] as const;
 
 function Utm7() {
-  const { session, user, loading: authLoading, signOut } = useAuth();
-  const { profile, loading: accessLoading } = useAppAccess();
+  const {
+    session,
+    user,
+    profile,
+    loading: authLoading,
+    signOut,
+    login,
+    error: authError,
+    refresh: refreshAuth,
+  } = useUtm7Auth();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview"),
     [menu, setMenu] = useState(false),
@@ -317,9 +324,6 @@ function Utm7() {
         setOverviewLayout(savedLayout as OverviewLayoutMode);
     } catch {}
   }, []);
-  useEffect(() => {
-    if (!authLoading && !session) window.location.replace("/login?next=%2Futm7");
-  }, [authLoading, session]);
   const allowed = Boolean(profile?.active && profile.is_admin);
   const params = {
     since,
@@ -338,8 +342,7 @@ function Utm7() {
   const query = useQuery({
     queryKey: ["utm7", user?.id, params],
     enabled: Boolean(session && allowed && validDates),
-    queryFn: () =>
-      utm7Api<DashboardData>(session!.access_token, { action: "dashboard", ...params }),
+    queryFn: () => utm7Api<DashboardData>({ action: "dashboard", ...params }),
     refetchInterval: 60000,
     retry: 1,
   });
@@ -354,7 +357,7 @@ function Utm7() {
     if (!session || !connectionId) return;
     setSyncing(true);
     try {
-      await utm7Api(session.access_token, { action: "sync_meta", ...params });
+      await utm7Api({ action: "sync_meta", ...params });
       await refresh();
       toast.success("Meta sincronizada.");
     } catch (e) {
@@ -397,7 +400,7 @@ function Utm7() {
     if (!session) return false;
     setSaving(true);
     try {
-      await utm7Api(session.access_token, { action, ...payload });
+      await utm7Api({ action, ...payload });
       await refresh();
       toast.success("Configuração salva.");
       return true;
@@ -492,13 +495,14 @@ function Utm7() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  if (authLoading || accessLoading || !session)
+  if (authLoading)
     return (
       <div className="utm7-loading">
         <Loader2 className="animate-spin" />
         <span>Carregando UTM7…</span>
       </div>
     );
+  if (!session) return <Utm7Login login={login} error={authError} refresh={refreshAuth} />;
   if (!allowed)
     return (
       <div className="utm7-loading">
@@ -1667,7 +1671,6 @@ function Utm7() {
             <BulkEditor
               key={bulk.action + bulk.rows.map((r) => r.id).join(",")}
               batch={bulk}
-              token={session.access_token}
               connectionId={connectionId}
               onBusy={setBulkBusy}
               onSettled={async () => {
@@ -1817,7 +1820,6 @@ function OverviewLayout({
 
 function BulkEditor({
   batch,
-  token,
   connectionId,
   onBusy,
   onSettled,
@@ -1828,7 +1830,6 @@ function BulkEditor({
     level: Level;
     sourceCount: number;
   };
-  token: string;
   connectionId: string;
   onBusy: (busy: boolean) => void;
   onSettled: () => Promise<void>;
@@ -1857,7 +1858,6 @@ function BulkEditor({
         items,
         (r) =>
           utm7Api(
-            token,
             batch.action === "budget"
               ? {
                   action: "prepare_budget",
@@ -2460,3 +2460,4 @@ function BudgetForm({
     </form>
   );
 }
+

@@ -33,3 +33,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Private VPS credentials stay outside source control.
+utm7-server/private/
+

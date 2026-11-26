@@ -1,6 +1,6 @@
 # UTM7
 
-Painel privado em `/utm7`, no mesmo projeto do Painel M7. O login existente é preservado. A API exige sessão Supabase válida e um registro `app_users` ativo com `is_admin=true`; a proteção não depende apenas da interface.
+Painel privado em `/utm7`, no mesmo projeto do Painel M7, com autenticação e PostgreSQL próprios na VPS. O e-mail e a senha do proprietário foram preservados por migração do hash, sem acessar a senha em texto. O UTM7 não faz chamadas ao Supabase. O restante do M7 mantém seu login existente.
 
 ## Funcionalidades
 
@@ -20,7 +20,7 @@ Painel privado em `/utm7`, no mesmo projeto do Painel M7. O login existente é p
 
 ## Fontes e atualização
 
-O backend `UTM7 | API privada de atribuição` (`t1XMLvMZkea4Vz0t`) atende `POST /webhook/m7-utm7/api` no n8n. A sessão é validada em `/auth/v1/user` e o perfil é consultado em `/rest/v1/app_users` **no mesmo Supabase do login M7**, a cada pedido. O perfil deve pertencer exatamente ao ID autenticado e ter `active=true` e `is_admin=true`. A API retorna dados agregados, sem nomes, e-mails, documentos ou IDs persistentes dos visitantes.
+O navegador usa `/api/utm7/session`, `/api/utm7/auth` e `/api/utm7/data` na mesma origem. O proxy em `src/server.ts` entrega as chamadas aos fluxos `UTM7 | Login próprio na VPS` (`RHLjLIXvNFPCF1jG`) e `UTM7 | API própria na VPS` (`5JRS2vIFdIgKIokC`). Ambos acessam o serviço privado `http://utm7-gateway:8080`, acessível apenas nas redes Docker. A API retorna dados agregados, sem nomes, e-mails, documentos ou IDs persistentes dos visitantes.
 
 O Sheets central continua sendo `1AlhIIhi8NXxImk5TB_GDLpRNvtpi96SpFN0lv8Cd8ww`, abas `tracking` e `vendas`, via credencial já existente no n8n. A leitura ocorre a cada minuto enquanto o painel está aberto. Nenhuma rotina de captura foi substituída.
 
@@ -63,17 +63,28 @@ O cadastro de pixel no UTM7 é um registro da oferta: não instala pixel, cria d
 
 `n8n/utm7-storage.sql` cria o schema privado `utm7`, tabelas de ofertas, conexões, cache e auditoria e as funções autorizadoras. RLS está habilitado e os papéis `PUBLIC`, `anon` e `authenticated` não têm acesso às tabelas/funções desse schema. Não se habilitou acesso público a tabelas do CRM.
 
-A API usa a credencial Postgres existente no n8n. A chave Supabase `sb_publishable_*` presente no fluxo é pública e serve para validar a sessão do usuário; não é uma service-role key. O alerta estático de "apikey hardcoded" do validador se refere a essa chave pública já usada pelo M7.
+A pasta `utm7-server/` contém o serviço Node e o Compose do banco PostgreSQL 17 isolado. Na VPS fica em `/opt/utm7`, sem portas públicas, com volume persistente `utm7_data`. O gateway tem filesystem somente leitura, limite de memória de 256 MB e acesso ao banco apenas pela rede privada. O banco tem limite de 512 MB. Segredos ficam em `/opt/utm7/private`, fora do Git; não são necessários segredos novos na Vercel.
 
-O banco de métricas contém um `public.app_users` legado com IDs diferentes dos usuários do Supabase atual. Ele **não** autoriza acesso ao UTM7. O Code node incorpora `src/lib/utm7-auth.mjs` e produz a identidade/permissão somente a partir das duas respostas HTTP verificadas; campos enviados pelo navegador não substituem essa decisão. Sessão inválida recebe 401; perfil ausente, inativo ou sem permissão recebe 403.
+As senhas novas usam scrypt com salt aleatório. O hash bcrypt importado é validado com pgcrypto e atualizado para scrypt no login quando a senha tem pelo menos 12 caracteres. Cada login tem até cinco tentativas por janela de 15 minutos. Contas desconhecidas compartilham um bucket limitado, evitando criar registros ilimitados. Ativações administrativas expiram e só podem ser usadas uma vez.
 
-`utm7.authorize_and_dispatch` recebe exclusivamente essa decisão do servidor e mantém `utm7.admin_identities`, sem acesso público, para as etapas SQL seguintes do mesmo fluxo. A identidade expira após cinco minutos e é desativada quando uma nova consulta nega a permissão. Esse registro não substitui a consulta do Supabase: cada pedido público passa novamente pelas duas verificações. Nenhum cadastro compartilhado do CRM foi alterado.
+Sessões duram até oito horas e ficam no cookie `__Host-utm7_session`, HttpOnly, Secure e SameSite=Strict. O banco guarda apenas o hash do token. Cada operação revalida expiração, revogação, usuário ativo e administrador; a identidade enviada pelo cliente é descartada. O proxy rejeita mutações sem Origin igual à origem do painel. Sair revoga a sessão no banco. A identidade privada para as funções SQL é derivada exclusivamente dessa sessão, nunca de `public.app_users` ou de flags do navegador.
 
 `utm7.status_audit` registra cada solicitação de ativação/pausa, usuário, alvo, estado esperado, estado anterior e resultado. RLS e revogação de acesso público também se aplicam a essa tabela e a `finish_status`. A API só aceita `ACTIVE`/`PAUSED`, sem exclusão ou arquivamento. Erros e timeouts ficam não confirmados e pedem sincronização antes de nova tentativa; o backend não repete POSTs automaticamente. Status confirmado invalida o cache da conexão. Referências oficiais: [anúncios](https://developers.facebook.com/docs/marketing-api/reference/ad-group), [conjuntos](https://developers.facebook.com/docs/graph-api/reference/ad-campaign/) e [campanhas](https://developers.facebook.com/docs/marketing-api/reference/adcampaigngroup/).
 
-Históricos de sucesso/erro da API em produção estão desativados, evitando registrar tokens enviados ao cadastrar conexões. O navegador não persiste tokens Meta nem dados pessoais de compradores. Autenticação M7 permanece sob controle do Supabase.
+Históricos de sucesso, erro e execuções manuais dos novos fluxos estão desativados para não registrar senhas e tokens. O navegador não persiste tokens Meta nem dados pessoais de compradores. O provider Supabase do M7 é carregado somente fora da rota UTM7. Os fluxos de captura da LP e de vendas permanecem independentes e inalterados.
 
-## Verificação — 26/11/2026
+`backup.sh` gera um dump diário às 03:17 UTC, verifica o catálogo com `pg_restore --list` e mantém 14 dias em `/opt/utm7/private/backups`. O backup fica na própria VPS; não protege contra perda completa do servidor. Restauração: desativar tráfego do UTM7, restaurar o dump em banco limpo e iniciar o mesmo Compose. O banco antigo e o fluxo antigo são preservados para rollback, sem dependência ativa após a troca.
+
+## Migração independente — 26/11/2026
+
+- Dados de ofertas, conexões, relatórios e auditorias migrados com contagem e fingerprint iguais antes do commit da transação.
+- Hash do proprietário verificado por fingerprint; a senha em texto não foi acessada.
+- 101 testes Node e TypeScript passaram; build de produção concluído.
+- QA real no PostgreSQL cobriu login, limite de tentativas, hash de sessão, expiração, revogação, mudança de permissão, migração bcrypt e identidade forjada.
+- Chromium isolado cobriu login real, Sheets e Meta reais, cookie HttpOnly, recarga, campanhas, organização, celular e logout. Nenhuma chamada ao Supabase mesmo com uma sessão antiga expirada no localStorage.
+- Conta de QA usa credencial aleatória temporária e é removida após a validação. Nenhuma senha do proprietário ou sessão do seu navegador pessoal foi usada. Alterações em anúncios continuam sendo testadas com API simulada.
+
+## Verificações anteriores da interface e dos cálculos
 
 - 90 testes Node: regressão do M7, cálculos, deduplicação/atribuição, guardas de orçamento/autorização, preferências e contraste; inclui conflitos/escopo de status, pais pausados, deduplicação de conjuntos, execução sequencial com falha parcial e geometria/taxas do funil.
 - TypeScript e build de produção passaram.
@@ -87,4 +98,5 @@ Históricos de sucesso/erro da API em produção estão desativados, evitando re
 - Atualização visual: Chromium isolado em desktop e celular verificou arraste, setas, visibilidade, persistência, ordem equivalente no CSV, filtro de ativos e totais recalculados, alternância de tema nas janelas e funil gráfico. Sessão/fontes simuladas para testar a interface sem escrever em anúncios ou controlar o navegador pessoal. Teste de contraste verifica as cores de texto/estado contra os três fundos em ambos os temas (mínimo 4,5:1).
 - Edição em massa: testes de interface com API simulada verificam ausência de envio antes da confirmação, valores em centavos, total diário da revisão, um POST por conjunto compartilhado, falha parcial e repetição somente dos itens não confirmados. Testes SQL no banco real são revertidos e não enviam POST à Meta. Leituras reais de campanha, conjunto e anúncio validaram os campos e pais usados pela guarda. Nenhuma veiculação ou orçamento real foi alterado para testar a implementação.
 
-O gerador `n8n/build-utm7-workflow.mjs` produz `n8n/utm7-api.workflow.js` para validar no SDK do n8n. Após alterações no motor ou nas guardas, regenere o fluxo e atualize os respectivos Code nodes. Não importe o fluxo gerado como novo workflow a cada alteração: mantenha o ID ativo.
+O gerador `n8n/build-utm7-workflow.mjs` produz `n8n/utm7-vps-api.workflow.js`. O fluxo de login está em `n8n/utm7-own-auth.workflow.js`. Após alterações no motor ou nas guardas, regenere e valide no SDK e atualize os respectivos nodes do ID ativo. O antigo `n8n/utm7-api.workflow.js` é apenas referência de rollback.
+

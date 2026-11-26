@@ -8,10 +8,8 @@ const e = (s) => "=" + s;
 const ref = (n) => `$('${n}').first().json`;
 const normal = "Normalizar pedido UTM7",
   db = "Consultar armazenamento UTM7",
-  auth = "Validar sessão M7",
-  profile = "Consultar administrador no Supabase",
+  auth = "Validar sessão própria",
   gate = "Identificar usuário autenticado";
-const pg = { postgres: { id: "jZl3Efj7Q2gOlBmi", name: "Postgres account" } };
 function add(id, type, version, name, parameters, extra = {}) {
   nodes.push({ id, type, version, config: { name, parameters, ...extra }, output: [{}] });
   return id;
@@ -27,20 +25,18 @@ function connect(a, b, output) {
   links.push({ a, b, output });
 }
 function sql(id, name, query, values) {
-  return add(
-    id,
-    "n8n-nodes-base.postgres",
-    2.8,
-    name,
-    { operation: "executeQuery", query, options: { queryReplacement: e(`{{ ${values} }}`) } },
-    { credentials: pg },
-  );
+  const operation={dispatch:"dispatch",save:"save_report",audit:"finish_budget",statusAudit:"finish_status"}[id];
+  const body=id==="dispatch" ? `{operation:"dispatch",token:${ref(normal)}.token,payload:${ref(gate)}.payload}` : `{...$json,operation:"${operation}",token:${ref(normal)}.token}`;
+  return add(id,"n8n-nodes-base.httpRequest",4.5,name,{
+    method:"POST",url:"http://utm7-gateway:8080/operation",authentication:"none",sendBody:true,specifyBody:"json",jsonBody:e(`{{ ${body} }}`),
+    options:{response:{response:{neverError:true,responseFormat:"json"}},timeout:20000}
+  });
 }
 const request = `${ref(gate)}.payload`,
   internal = `${ref(db)}.response.internal`;
 const webhook = add("webhook", "n8n-nodes-base.webhook", 2.2, "Receber pedido UTM7", {
   httpMethod: "POST",
-  path: "m7-utm7/api",
+  path: "m7-utm7/vps/api",
   responseMode: "responseNode",
   authentication: "none",
   options: {
@@ -60,50 +56,11 @@ if(new Date(clean.until)-new Date(clean.since)>92*86400000||clean.since>clean.un
 return [{json:{token:String(p.token||'').slice(0,12000),payload:clean}}];`,
 );
 const authenticate = add("authenticate", "n8n-nodes-base.httpRequest", 4.5, auth, {
-  method: "GET",
-  url: "https://dhhkmoubjojvrrixghyt.supabase.co/auth/v1/user",
-  authentication: "none",
-  sendHeaders: true,
-  headerParameters: {
-    parameters: [
-      { name: "apikey", value: "sb_publishable_Zse2ZhrvbndCTIPtxU7L0g_oOJhUGXB" },
-      { name: "Authorization", value: e("Bearer {{ $json.token }}") },
-    ],
-  },
-  options: {
-    response: { response: { neverError: true, fullResponse: true, responseFormat: "json" } },
-    timeout: 12000,
-  },
+  method:"POST",url:"http://utm7-gateway:8080/auth",authentication:"none",sendBody:true,specifyBody:"json",
+  jsonBody:e(`{{ {action:"session",token:${ref(normal)}.token} }}`),
+  options:{response:{response:{neverError:true,fullResponse:true,responseFormat:"json"}},timeout:12000}
 });
-const access = add("access", "n8n-nodes-base.httpRequest", 4.5, profile, {
-  method: "GET",
-  url: "https://dhhkmoubjojvrrixghyt.supabase.co/rest/v1/app_users",
-  authentication: "none",
-  sendQuery: true,
-  queryParameters: {
-    parameters: [
-      { name: "select", value: "user_id,active,is_admin" },
-      {
-        name: "user_id",
-        value: e(
-          "{{ 'eq.' + ($json.statusCode === 200 && /^[0-9a-f-]{36}$/i.test($json.body?.id || '') ? $json.body.id : '00000000-0000-0000-0000-000000000000') }}",
-        ),
-      },
-    ],
-  },
-  sendHeaders: true,
-  headerParameters: {
-    parameters: [
-      { name: "apikey", value: "sb_publishable_Zse2ZhrvbndCTIPtxU7L0g_oOJhUGXB" },
-      { name: "Authorization", value: e(`Bearer {{ ${ref(normal)}.token }}`) },
-    ],
-  },
-  options: {
-    response: { response: { neverError: true, fullResponse: true, responseFormat: "json" } },
-    timeout: 12000,
-  },
-});
-const authGuard = readFileSync(path.join(root, "../src/lib/utm7-auth.mjs"), "utf8").replace(
+const authGuard = readFileSync(path.join(root, "../src/lib/utm7-own-auth.mjs"), "utf8").replace(
   /^export /gm,
   "",
 );
@@ -111,7 +68,7 @@ const identify = code(
   "identify",
   gate,
   authGuard +
-    `\nreturn [{json:authorizeUtm7(${ref(auth)},$input.first().json,${ref(normal)}.payload)}];`,
+    `\nreturn [{json:authorizeOwnUtm7(${ref(auth)},${ref(normal)}.payload)}];`,
 );
 const dispatch = sql(
   "dispatch",
@@ -135,7 +92,7 @@ const respond = add("respond", "n8n-nodes-base.respondToWebhook", 1.5, "Responde
   respondWith: "json",
   responseBody: e("{{ $json.response }}"),
   options: {
-    responseCode: e("{{ $json.response.status || ($json.response.ok ? 200 : 400) }}"),
+    responseCode: e("{{ $json.response?.status || ($json.response?.ok ? 200 : 400) }}"),
     responseHeaders: {
       entries: [
         {
@@ -460,8 +417,7 @@ const finishStatus = code(
 
 connect(webhook, normalize);
 connect(normalize, authenticate);
-connect(authenticate, access);
-connect(access, identify);
+connect(authenticate, identify);
 connect(identify, dispatch);
 connect(dispatch, choose);
 connect(choose, route);
@@ -535,13 +491,14 @@ sdk += "export default workflow('m7-utm7-api','UTM7 | API privada de atribuiçã
 for (const l of links)
   sdk += `\n.add(${l.a}${l.output === undefined ? "" : `.output(${l.output})`}.to(${l.b}))`;
 sdk +=
-  "\n.group('Acesso privado',[normalize,authenticate,access,identify,dispatch,choose,route],{description:'Valida sessão e perfil ativo de administrador no mesmo Supabase do M7 antes de consultar dados.'})";
+  "\n.group('Acesso privado',[normalize,authenticate,identify,dispatch,choose,route],{description:'Valida sessão própria na VPS antes de consultar dados, sem dependência do Supabase.'})";
 sdk +=
   "\n.group('Sheets e atribuição',[sheets,aggregate],{description:'Lê tracking e vendas, elimina testes e duplicatas e calcula o funil por anúncio.'})";
 sdk +=
   "\n.group('Sincronização Meta',[account,sets,day,period_campaign,period_adset,period_ad,pack,save],{description:'Consulta a Marketing API por nível e período e salva cache sem expor o token ao navegador.'})";
 sdk +=
   "\n.group('Orçamento com confirmação',[liveBudget,checkBudget,budgetRoute,postBudget,budgetResult,audit,finishBudget],{description:'Confere conta, valor atual e confirmação; aplica orçamento e registra resultado sem mudar status.'})\n.group('Veiculação com confirmação',[liveStatus,checkStatus,statusRoute,postStatus,statusResult,statusAudit,finishStatus],{description:'Confere item, conta, estado atual e pais antes de ativar ou pausar, com auditoria privada.'});\n";
-writeFileSync(path.join(root, "utm7-api.workflow.js"), sdk);
+writeFileSync(path.join(root, "utm7-vps-api.workflow.js"), sdk);
 writeFileSync(path.join(root, "../.workspace-utm7-nodes.json"), JSON.stringify(nodes));
 console.log(`Generated ${nodes.length} nodes, ${sdk.length} bytes`);
+

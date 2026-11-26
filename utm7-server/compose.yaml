@@ -1,0 +1,50 @@
+services:
+  database:
+    image: postgres:17-alpine
+    container_name: utm7-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: utm7
+      POSTGRES_DB: utm7
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      TZ: UTC
+    command: ["postgres", "-c", "max_connections=30", "-c", "shared_buffers=128MB"]
+    secrets: [db_password]
+    volumes: [utm7_data:/var/lib/postgresql/data]
+    networks: [private]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U utm7 -d utm7"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  gateway:
+    build: .
+    image: utm7-gateway:20261126
+    container_name: utm7-gateway
+    restart: unless-stopped
+    depends_on:
+      database: { condition: service_healthy }
+    environment:
+      PGHOST: database
+      PGUSER: utm7
+      PGDATABASE: utm7
+      PGPASSWORD_FILE: /run/secrets/db_password
+      TZ: UTC
+    secrets: [db_password]
+    networks:
+      private:
+      shared: { aliases: [utm7-gateway] }
+    mem_limit: 256m
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+secrets:
+  db_password: { file: ./private/db_password }
+volumes:
+  utm7_data: { name: utm7_data }
+networks:
+  private: { name: utm7-private, internal: true }
+  shared: { name: easypanel-projetopessoal, external: true }
+

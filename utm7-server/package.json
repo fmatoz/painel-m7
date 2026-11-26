@@ -1,0 +1,7 @@
+{
+  "name": "utm7-private-gateway",
+  "private": true,
+  "type": "module",
+  "dependencies": { "pg": "8.23.1" }
+}
+

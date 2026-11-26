@@ -47,6 +47,10 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      if (new URL(request.url).pathname.startsWith("/api/utm7/")) {
+        const { utm7Proxy } = await import("./lib/utm7-proxy.server.mjs");
+        return await utm7Proxy(request);
+      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
@@ -59,3 +63,4 @@ export default {
     }
   },
 };
+

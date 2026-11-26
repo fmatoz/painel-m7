@@ -6,9 +6,12 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
-import { AuthProvider } from "@/hooks/use-auth";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
+const M7AuthProvider = lazy(() =>
+  import("@/hooks/use-auth").then((m) => ({ default: m.AuthProvider })),
+);
 import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
@@ -156,14 +159,25 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const ownAuth = pathname === "/utm7" || pathname.startsWith("/utm7/");
+  const content = (
+    <>
+      <Outlet />
+      <Toaster richColors position="top-right" />
+    </>
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster richColors position="top-right" />
-      </AuthProvider>
+      {ownAuth ? (
+        content
+      ) : (
+        <Suspense fallback={<div>Carregando…</div>}>
+          <M7AuthProvider>{content}</M7AuthProvider>
+        </Suspense>
+      )}
     </QueryClientProvider>
   );
 }
+

@@ -17,6 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    supabase.auth.startAutoRefresh();
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       subscription.unsubscribe();
+      supabase.auth.stopAutoRefresh();
     };
   }, []);
 
@@ -54,3 +56,4 @@ export function useAuth() {
   }
   return context;
 }
+
