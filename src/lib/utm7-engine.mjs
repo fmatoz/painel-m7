@@ -64,6 +64,7 @@ const emptyMetrics = () => ({
   pageViews: 0,
   visitors: 0,
   checkouts: 0,
+  paymentAttempts: 0,
   purchases: 0,
   revenue: 0,
   fees: 0,
@@ -93,6 +94,8 @@ const finishMetrics = (m) => ({
   metaLpRate: ratio(m.metaLpViews, m.clicks, 100),
   checkoutRate: ratio(m.checkouts, m.visitors, 100),
   costCheckout: ratio(m.spend, m.checkouts),
+  costPaymentAttempt: ratio(m.spend, m.paymentAttempts),
+  paymentAttemptRate: ratio(m.paymentAttempts, m.checkouts, 100),
   conversionRate: ratio(m.purchases, m.checkouts, 100),
   averageTicket: ratio(m.revenue, m.purchases),
 });
@@ -265,10 +268,28 @@ export function buildDashboard(sheet, catalog, request) {
       add(vslFields[r.event], 1, date, a, `${offer.id}:${date}:${identity}`);
   }
   const paid = new Map(),
+    attempts = new Map(),
     reversed = new Map();
   for (const r of sales) {
     const payment = String(r.payment_id || "").trim();
     if (!payment) continue;
+    // Only payment-stage evidence counts here. LP clicks and cart abandonment do not.
+    const attemptEvent = String(r.event || "").toLowerCase();
+    const attemptStatus = String(r.payment_status || "").toLowerCase();
+    const stageStatuses =
+      /^(unpaid|pending|waiting_payment|processing|in_process|authorized|paid|approved|completed|refused|declined|rejected|failed|denied)$/;
+    const isAttempt =
+      (attemptEvent === "pix_gerado" && (!attemptStatus || stageStatuses.test(attemptStatus))) ||
+      (attemptEvent === "purchase" &&
+        /^(paid|approved|completed|)$/.test(attemptStatus) &&
+        number(r.value_gross) > 0) ||
+      (attemptEvent.startsWith("payment_") &&
+        stageStatuses.test(attemptEvent.slice(8)) &&
+        (!attemptStatus || stageStatuses.test(attemptStatus)));
+    if (isAttempt) {
+      const previous = attempts.get(payment);
+      if (!previous || String(r.timestamp) < String(previous.timestamp)) attempts.set(payment, r);
+    }
     if (
       r.event === "purchase" &&
       (r.payment_status === "" || /^(paid|approved|completed)$/i.test(r.payment_status)) &&
@@ -299,6 +320,11 @@ export function buildDashboard(sheet, catalog, request) {
     const offer = findOffer(r) || fallback?.offer || campaignOffer(a.campaign_id);
     return { a, offer, date: eventDate(r) };
   };
+  for (const r of attempts.values()) {
+    const { a, offer, date } = salesContext(r);
+    if (!isSelected(offer) || !inPeriod(date) || !matches(a)) continue;
+    add("paymentAttempts", 1, date, a);
+  }
   for (const r of paid.values()) {
     const { a, offer, date } = salesContext(r);
     if (!isSelected(offer) || !inPeriod(date) || !matches(a)) continue;
@@ -393,3 +419,4 @@ export function buildDashboard(sheet, catalog, request) {
     campaignIds: [...campaignIds],
   };
 }
+

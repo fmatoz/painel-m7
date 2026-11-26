@@ -192,11 +192,18 @@ const columns: Column[] = [
   },
   {
     key: "checkouts",
-    label: "Compras iniciadas",
+    label: "IC",
     format: integer,
     help: "Cliques no botão da oferta, deduplicados por navegador/sessão e dia. Não são vendas aprovadas.",
   },
   { key: "costCheckout", label: "Custo por IC", format: money, meta: true },
+  {
+    key: "paymentAttempts",
+    label: "Compras iniciadas",
+    format: integer,
+    help: "Tentativas de pagamento recebidas do checkout, como Pix gerado, cartão recusado ou pagamento aprovado. Uma vez por ID de pagamento, na primeira ocorrência recebida. Não inclui apenas visitar o checkout.",
+  },
+  { key: "costPaymentAttempt", label: "Custo por compra iniciada", format: money, meta: true },
   { key: "video3s", label: "Reproduções 3s", format: integer, meta: true },
   {
     key: "hookRate",
@@ -235,6 +242,7 @@ const defaultCols = [
   "ctr",
   "visitors",
   "checkouts",
+  "paymentAttempts",
 ];
 const nav = [
   { id: "overview", label: "Visão geral", icon: BarChart3 },
@@ -1295,6 +1303,10 @@ function Utm7() {
                           Custo por IC<strong>{hasMeta ? money(m!.costCheckout) : "—"}</strong>
                         </div>
                         <div>
+                          Custo por compra iniciada
+                          <strong>{hasMeta ? money(m!.costPaymentAttempt) : "—"}</strong>
+                        </div>
+                        <div>
                           Custo por compra<strong>{hasMeta ? money(m!.cpa) : "—"}</strong>
                         </div>
                       </div>
@@ -1777,6 +1789,12 @@ function Utm7() {
               dia. Não é confirmação de pagamento.
             </p>
             <p>
+              <strong>Compras iniciadas:</strong> tentativa de pagamento recebida do checkout, como
+              Pix gerado ou cartão recusado. Cada ID de pagamento conta uma vez, na primeira
+              ocorrência. Pagamento aprovado também comprova uma tentativa, mesmo quando a
+              notificação anterior não chegou. Carrinho abandonado sozinho não conta.
+            </p>
+            <p>
               <strong>Visitas únicas:</strong> navegador identificado por oferta e dia. Sem ID
               persistente, a visita aparece apenas em PageViews brutos.
             </p>
@@ -2164,12 +2182,14 @@ function MiniFunnel({ metrics: m, hasMeta }: { metrics: Metrics; hasMeta: boolea
     ? [
         { label: "Cliques no link", value: m.clicks },
         { label: "Vis. página (Meta)", value: m.metaLpViews },
-        { label: "Compras iniciadas", value: m.checkouts },
+        { label: "IC", value: m.checkouts },
+        { label: "Compras iniciadas", value: m.paymentAttempts },
         { label: "Compras aprovadas", value: m.purchases },
       ]
     : [
         { label: "Visitas únicas/dia", value: m.visitors },
-        { label: "Compras iniciadas", value: m.checkouts },
+        { label: "IC", value: m.checkouts },
+        { label: "Compras iniciadas", value: m.paymentAttempts },
         { label: "Compras aprovadas", value: m.purchases },
       ];
   const graph = funnelGeometry(rows.map((r) => r.value));

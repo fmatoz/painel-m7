@@ -70,6 +70,7 @@ export function summarizeMetricRows(rows) {
     "pageViews",
     "visitors",
     "checkouts",
+    "paymentAttempts",
     "purchases",
     "revenue",
     "fees",
@@ -108,7 +109,10 @@ export function summarizeMetricRows(rows) {
     metaLpRate: ratio(m.metaLpViews, m.clicks, 100),
     checkoutRate: ratio(m.checkouts, m.visitors, 100),
     costCheckout: ratio(m.spend, m.checkouts),
+    costPaymentAttempt: ratio(m.spend, m.paymentAttempts),
+    paymentAttemptRate: ratio(m.paymentAttempts, m.checkouts, 100),
     conversionRate: ratio(m.purchases, m.checkouts, 100),
     averageTicket: ratio(m.revenue, m.purchases),
   };
 }
+

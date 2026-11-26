@@ -40,14 +40,17 @@ test("active filter excludes paused, inherited pauses, unknown and unattributed 
 });
 test("filtered footer recomputes weighted rates and budget instead of using overall totals", () => {
   const rows = [
-    { spend: 10, clicks: 2, impressions: 10, revenue: 20, purchases: 1, budgetMinor: 1000 },
-    { spend: 20, clicks: 8, impressions: 90, revenue: 40, purchases: 1, budgetMinor: 1500 },
+    { spend: 10, clicks: 2, impressions: 10, revenue: 20, purchases: 1, checkouts: 2, paymentAttempts: 1, budgetMinor: 1000 },
+    { spend: 20, clicks: 8, impressions: 90, revenue: 40, purchases: 1, checkouts: 3, paymentAttempts: 1, budgetMinor: 1500 },
   ];
   const m = summarizeMetricRows(rows);
   assert.equal(m.spend, 30);
   assert.equal(m.cpc, 3);
   assert.equal(m.ctr, 10);
   assert.equal(m.cpa, 15);
+  assert.equal(m.paymentAttempts, 2);
+  assert.equal(m.costPaymentAttempt, 15);
+  assert.equal(m.paymentAttemptRate, 40);
   assert.equal(m.budgetMinor, 2500);
   assert.equal(m.frequency, null);
   assert.equal(summarizeMetricRows([]).cpa, null);
@@ -76,3 +79,4 @@ test("M7 text and semantic colors keep AA contrast on dark and light surfaces", 
     }
   }
 });
+

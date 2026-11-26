@@ -29,6 +29,7 @@ export type Metrics = {
   pageViews: number;
   visitors: number;
   checkouts: number;
+  paymentAttempts: number;
   purchases: number;
   revenue: number;
   fees: number;
@@ -55,6 +56,8 @@ export type Metrics = {
   metaLpRate: number | null;
   checkoutRate: number | null;
   costCheckout: number | null;
+  costPaymentAttempt: number | null;
+  paymentAttemptRate: number | null;
   conversionRate: number | null;
   averageTicket: number | null;
 };
@@ -108,3 +111,4 @@ export type DashboardData = {
   };
   updatedAt: string;
 };
+

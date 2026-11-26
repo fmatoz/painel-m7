@@ -129,9 +129,85 @@ test("pending payments do not convert and repeated approved webhooks count once"
     [sale({ event: "pix_gerado", payment_status: "pending" }), s, s],
   );
   assert.equal(d.totals.purchases, 1);
+  assert.equal(d.totals.paymentAttempts, 1);
   assert.equal(d.totals.revenue, 14.97);
   assert.equal(d.totals.fees, 1.25);
   assert.equal(d.tables.ad[0].purchases, 1);
+});
+
+test("LP IC and actual payment attempts are separate funnel stages", () => {
+  const pix = sale({ event: "pix_gerado", payment_status: "pending", payment_id: "pix1" });
+  const refused = sale({
+    event: "payment_refused",
+    payment_status: "refused",
+    payment_method: "credit_card",
+    payment_id: "card1",
+  });
+  const d = run(
+    [row("initiate_checkout"), row("initiate_checkout", 2)],
+    [pix, pix, refused, refused, sale()],
+    { report: meta },
+  );
+  assert.equal(d.totals.checkouts, 1);
+  assert.equal(d.totals.paymentAttempts, 3);
+  assert.equal(d.totals.purchases, 1);
+  assert.equal(d.totals.costPaymentAttempt, 10 / 3);
+  assert.equal(d.totals.paymentAttemptRate, 300);
+  assert.equal(d.tables.ad[0].paymentAttempts, 3);
+  assert.equal(d.daily[0].paymentAttempts, 3);
+});
+
+test("payment status updates count once and direct approval proves a payment attempt", () => {
+  const d = run(
+    [],
+    [sale({ event: "payment_declined", payment_status: "declined" }), sale(), sale()],
+  );
+  assert.equal(d.totals.checkouts, 0);
+  assert.equal(d.totals.paymentAttempts, 1);
+  assert.equal(d.totals.purchases, 1);
+});
+
+test("payment attempts use their first received timestamp across periods", () => {
+  const pending = sale({
+    event: "pix_gerado",
+    payment_status: "pending",
+    timestamp: "2026-11-25 12:00:00",
+  });
+  const d = run([], [sale(), pending]);
+  assert.equal(d.totals.paymentAttempts, 0);
+  assert.equal(d.totals.purchases, 1);
+});
+
+test("abandonment, refund-only, diagnostics, unknown states and invalid approvals do not invent attempts", () => {
+  const sales = [
+    sale({ event: "cart_abandoned", payment_status: "pending", payment_id: "abandoned" }),
+    sale({ event: "payment_refunded", payment_status: "refunded", payment_id: "refund" }),
+    sale({ event: "payment_chargeback", payment_status: "chargeback", payment_id: "chargeback" }),
+    sale({ event: "payment_canceled", payment_status: "canceled", payment_id: "canceled" }),
+    sale({ event: "diagnostico_pix_gerado", payment_status: "pending", payment_id: "diagnostic" }),
+    sale({ event: "payment_unknown", payment_status: "unknown", payment_id: "unknown" }),
+    sale({ payment_id: "invalid", value_gross: 0 }),
+    sale({ event: "pix_gerado", payment_status: "pending", payment_id: "" }),
+  ];
+  const d = run([row("initiate_checkout")], sales);
+  assert.equal(d.totals.checkouts, 1);
+  assert.equal(d.totals.paymentAttempts, 0);
+  assert.equal(d.totals.costPaymentAttempt, null);
+});
+
+test("payment attempts inherit only matching click attribution and respect campaign filters", () => {
+  const d = run(
+    [row("page_view")],
+    [sale({ event: "payment_rejected", payment_status: "rejected" })],
+  );
+  assert.equal(d.tables.ad.find((r) => r.id === aid).paymentAttempts, 1);
+  const other = run(
+    [row("page_view")],
+    [sale({ event: "payment_rejected", payment_status: "rejected" })],
+    {},
+    { campaign_id: "999999999999" },
+  );
+  assert.equal(other.totals.paymentAttempts, 0);
 });
 test("sales without UTMs inherit the matching click session only", () => {
   const d = run([row("page_view")], [sale(), sale({ payment_id: "payment2", click_id: "other" })]);
@@ -236,3 +312,4 @@ test("refund with blank optional fields retains the original offer attribution",
   const d = run([], [sale(), refund]);
   assert.equal(d.totals.refunds, 1);
 });
+
