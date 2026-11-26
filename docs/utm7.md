@@ -14,7 +14,7 @@ Painel privado em `/utm7`, no mesmo projeto do Painel M7. O login existente é p
 
 ## Fontes e atualização
 
-O backend `UTM7 | API privada de atribuição` (`t1XMLvMZkea4Vz0t`) atende `POST /webhook/m7-utm7/api` no n8n. A sessão é validada em `/auth/v1/user` do Supabase antes da autorização no banco. A API retorna dados agregados, sem nomes, e-mails, documentos ou IDs persistentes dos visitantes.
+O backend `UTM7 | API privada de atribuição` (`t1XMLvMZkea4Vz0t`) atende `POST /webhook/m7-utm7/api` no n8n. A sessão é validada em `/auth/v1/user` e o perfil é consultado em `/rest/v1/app_users` **no mesmo Supabase do login M7**, a cada pedido. O perfil deve pertencer exatamente ao ID autenticado e ter `active=true` e `is_admin=true`. A API retorna dados agregados, sem nomes, e-mails, documentos ou IDs persistentes dos visitantes.
 
 O Sheets central continua sendo `1AlhIIhi8NXxImk5TB_GDLpRNvtpi96SpFN0lv8Cd8ww`, abas `tracking` e `vendas`, via credencial já existente no n8n. A leitura ocorre a cada minuto enquanto o painel está aberto. Nenhuma rotina de captura foi substituída.
 
@@ -59,17 +59,22 @@ O cadastro de pixel no UTM7 é um registro da oferta: não instala pixel, cria d
 
 A API usa a credencial Postgres existente no n8n. A chave Supabase `sb_publishable_*` presente no fluxo é pública e serve para validar a sessão do usuário; não é uma service-role key. O alerta estático de "apikey hardcoded" do validador se refere a essa chave pública já usada pelo M7.
 
+O banco de métricas contém um `public.app_users` legado com IDs diferentes dos usuários do Supabase atual. Ele **não** autoriza acesso ao UTM7. O Code node incorpora `src/lib/utm7-auth.mjs` e produz a identidade/permissão somente a partir das duas respostas HTTP verificadas; campos enviados pelo navegador não substituem essa decisão. Sessão inválida recebe 401; perfil ausente, inativo ou sem permissão recebe 403.
+
+`utm7.authorize_and_dispatch` recebe exclusivamente essa decisão do servidor e mantém `utm7.admin_identities`, sem acesso público, para as etapas SQL seguintes do mesmo fluxo. A identidade expira após cinco minutos e é desativada quando uma nova consulta nega a permissão. Esse registro não substitui a consulta do Supabase: cada pedido público passa novamente pelas duas verificações. Nenhum cadastro compartilhado do CRM foi alterado.
+
 Históricos de sucesso/erro da API em produção estão desativados, evitando registrar tokens enviados ao cadastrar conexões. O navegador não persiste tokens Meta nem dados pessoais de compradores. Autenticação M7 permanece sob controle do Supabase.
 
 ## Verificação — 26/11/2026
 
-- 72 testes Node passaram: regressão do M7, cálculos, datas, deduplicação, diagnósticos, atribuição, taxas, estornos e guardas de orçamento.
+- 79 testes Node passaram: regressão do M7, cálculos, datas, deduplicação, diagnósticos, atribuição, taxas, estornos, guardas de orçamento e sete casos de identidade/permissão do UTM7.
 - TypeScript e build de produção passaram.
 - Fontes reais: leitura do Sheets, consulta da conta Meta e dos cinco conjuntos/anúncios, sincronização e persistência do cache, dashboard autorizado executado internamente por MCP.
 - SQL real com transação revertida: negação sem administrador, ausência de token na resposta, exigência de confirmação, rejeição de pixel inválido, deduplicação da solicitação, preservação de token vazio na edição e revogação de acesso público. Nenhum registro de QA de orçamento foi mantido.
-- HTTP público: sessão inválida recebe 403 sem dados; CORS permite a origem do M7.
+- API n8n corrigida: sessão inválida, inclusive com ID e flags de administrador forjados no corpo, recebe 401 sem dados; CORS permite a origem do M7.
 - Chromium headless isolado: redirecionamento ao login, UI desktop/mobile, os cinco conjuntos, filtro por nível, colunas, CSV, cadastro de oferta/pixel e modal de orçamento. Sem controle do navegador ou perfil pessoal do usuário.
 - As chamadas de escrita da Meta nos testes de interface foram simuladas. Não se alteraram orçamentos reais apenas para testar. O caminho de escrita exige confirmação no painel e será confirmado pela API da Meta quando utilizado.
-- O teste visual autenticado usa uma sessão simulada e agregados reais, somente no ambiente de QA. Não se criou login temporário nem se extraiu a sessão do navegador pessoal. O primeiro uso com a sessão real ocorre pelo login existente do M7.
+- O teste visual autenticado usa uma sessão simulada e agregados reais, somente no ambiente de QA. Não se criou login temporário nem se extraiu a sessão do navegador pessoal. Esse teste inicial não detectou a divergência de IDs porque o SQL de QA usava o cadastro legado. A regressão agora usa o ID atual verificado independentemente, rejeita o ID legado, testa expiração/revogação e reverte as alterações de QA.
+- Após publicar a correção, uma requisição real do login existente passou pela validação da sessão e do perfil ativo; confirmada por `verified_at` no armazenamento privado, sem capturar o JWT nem habilitar históricos com dados sensíveis.
 
 O gerador `n8n/build-utm7-workflow.mjs` produz `n8n/utm7-api.workflow.js` para validar no SDK do n8n. Após alterações no motor ou nas guardas, regenere o fluxo e atualize os respectivos Code nodes. Não importe o fluxo gerado como novo workflow a cada alteração: mantenha o ID ativo.

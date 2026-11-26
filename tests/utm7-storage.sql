@@ -2,10 +2,18 @@ BEGIN;
 DO $test$
 DECLARE uid text; r jsonb; cid uuid:='3b5a386b-7a50-4251-bdc9-0146452ca001'; token_before text;
 BEGIN
- SELECT user_id::text INTO uid FROM public.app_users WHERE email='gestaom7ia@gmail.com' AND active AND is_admin;
- IF uid IS NULL THEN RAISE EXCEPTION 'QA requires a real active admin'; END IF;
+ -- Current Supabase auth identity, independently verified via its app_users.
+ -- Do not derive QA identity from the metrics database's legacy app_users.
+ uid:='de5f395b-64eb-45e5-9ec7-1d23aa7bc712';
+ r:=utm7.authorize_and_dispatch('',true,'{"action":"dashboard"}');
+ IF r->>'status'<>'401' THEN RAISE EXCEPTION 'Missing verified session accepted'; END IF;
+ r:=utm7.authorize_and_dispatch(uid,false,'{"action":"dashboard","authorized":true,"is_admin":true}');
+ IF r->>'status'<>'403' THEN RAISE EXCEPTION 'Unverified admin accepted'; END IF;
  r:=utm7.dispatch('',jsonb_build_object('action','dashboard','since','2026-11-26','until','2026-11-26'));
  IF r->>'ok'<>'false' OR r->>'status'<>'403' THEN RAISE EXCEPTION 'Unauthenticated request accepted'; END IF;
+ r:=utm7.authorize_and_dispatch(uid,true,jsonb_build_object('action','dashboard','since','2026-11-26','until','2026-11-26','connection_id',cid));
+ IF r->>'ok'<>'true' OR NOT utm7.is_admin(uid) THEN RAISE EXCEPTION 'Verified current Supabase admin rejected'; END IF;
+ IF utm7.is_admin('346232d0-8180-432a-a811-8ce17199f841') THEN RAISE EXCEPTION 'Legacy profile granted access without verification'; END IF;
  r:=utm7.dispatch(uid,jsonb_build_object('action','dashboard','since','2026-11-26','until','2026-11-26','connection_id',cid));
  IF r->>'ok'<>'true' OR r#>'{data,connections,0,access_token}' IS NOT NULL THEN RAISE EXCEPTION 'Connection secret leaked'; END IF;
  r:=utm7.dispatch(uid,jsonb_build_object('action','prepare_budget','connection_id',cid,'adset_id','120255050101080580','new_budget_minor',1500,'expected_budget_minor',1000,'confirmed',false,'request_id','00000000-0000-4000-8000-000000000007'));
@@ -20,6 +28,12 @@ BEGIN
  r:=utm7.dispatch(uid,jsonb_build_object('action','save_connection','id',cid,'name','QA rolled back','account_id','233896209622152','access_token',''));
  IF r->>'ok'<>'true' OR (SELECT access_token FROM utm7.connections WHERE id=cid)<>token_before THEN RAISE EXCEPTION 'Blank token replaced existing secret'; END IF;
  IF EXISTS(SELECT 1 FROM information_schema.role_table_grants WHERE table_schema='utm7' AND grantee IN ('anon','authenticated','PUBLIC')) THEN RAISE EXCEPTION 'Private storage has public grants'; END IF;
+ UPDATE utm7.admin_identities SET verified_at=now()-interval '6 minutes' WHERE user_id=uid::uuid;
+ IF utm7.is_admin(uid) THEN RAISE EXCEPTION 'Expired private identity accepted'; END IF;
+ r:=utm7.authorize_and_dispatch(uid,true,'{"action":"invalid"}');
+ r:=utm7.authorize_and_dispatch(uid,false,'{"action":"dashboard"}');
+ IF utm7.is_admin(uid) OR r->>'status'<>'403' THEN RAISE EXCEPTION 'Revoked administrator retained access'; END IF;
+ IF EXISTS(SELECT 1 FROM information_schema.routine_privileges WHERE routine_schema='utm7' AND grantee IN ('anon','authenticated','PUBLIC')) THEN RAISE EXCEPTION 'Private function has public grants'; END IF;
 END;
 $test$;
 ROLLBACK;

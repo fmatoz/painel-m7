@@ -9,6 +9,7 @@ const ref = (n) => `$('${n}').first().json`;
 const normal = "Normalizar pedido UTM7",
   db = "Consultar armazenamento UTM7",
   auth = "Validar sessão M7",
+  profile = "Consultar administrador no Supabase",
   gate = "Identificar usuário autenticado";
 const pg = { postgres: { id: "jZl3Efj7Q2gOlBmi", name: "Postgres account" } };
 function add(id, type, version, name, parameters, extra = {}) {
@@ -53,7 +54,7 @@ const normalize = code(
 if(!p||typeof p!=='object'||Array.isArray(p))p={};
 const actions=['dashboard','save_offer','save_connection','sync_meta','prepare_budget'];
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const clean=Object.fromEntries(Object.entries(p).filter(([k])=>!['token','user_id','internal'].includes(k)));
+const clean=Object.fromEntries(Object.entries(p).filter(([k])=>!['token','user_id','internal','authorized','is_admin','active'].includes(k)));
 clean.action=actions.includes(p.action)?p.action:'invalid';clean.since=/^\\d{4}-\\d{2}-\\d{2}$/.test(p.since||'')?p.since:today;clean.until=/^\\d{4}-\\d{2}-\\d{2}$/.test(p.until||'')?p.until:today;
 if(new Date(clean.until)-new Date(clean.since)>92*86400000||clean.since>clean.until)clean.action='invalid';
 return [{json:{token:String(p.token||'').slice(0,12000),payload:clean}}];`,
@@ -69,17 +70,53 @@ const authenticate = add("authenticate", "n8n-nodes-base.httpRequest", 4.5, auth
       { name: "Authorization", value: e("Bearer {{ $json.token }}") },
     ],
   },
-  options: { response: { response: { neverError: true, responseFormat: "json" } }, timeout: 12000 },
+  options: {
+    response: { response: { neverError: true, fullResponse: true, responseFormat: "json" } },
+    timeout: 12000,
+  },
 });
+const access = add("access", "n8n-nodes-base.httpRequest", 4.5, profile, {
+  method: "GET",
+  url: "https://dhhkmoubjojvrrixghyt.supabase.co/rest/v1/app_users",
+  authentication: "none",
+  sendQuery: true,
+  queryParameters: {
+    parameters: [
+      { name: "select", value: "user_id,active,is_admin" },
+      {
+        name: "user_id",
+        value: e(
+          "{{ 'eq.' + ($json.statusCode === 200 && /^[0-9a-f-]{36}$/i.test($json.body?.id || '') ? $json.body.id : '00000000-0000-0000-0000-000000000000') }}",
+        ),
+      },
+    ],
+  },
+  sendHeaders: true,
+  headerParameters: {
+    parameters: [
+      { name: "apikey", value: "sb_publishable_Zse2ZhrvbndCTIPtxU7L0g_oOJhUGXB" },
+      { name: "Authorization", value: e(`Bearer {{ ${ref(normal)}.token }}`) },
+    ],
+  },
+  options: {
+    response: { response: { neverError: true, fullResponse: true, responseFormat: "json" } },
+    timeout: 12000,
+  },
+});
+const authGuard = readFileSync(path.join(root, "../src/lib/utm7-auth.mjs"), "utf8").replace(
+  /^export /gm,
+  "",
+);
 const identify = code(
   "identify",
   gate,
-  `const auth=$input.first().json;const r=${ref(normal)};return [{json:{user_id:typeof auth.id==='string'?auth.id:'',payload:r.payload}}];`,
+  authGuard +
+    `\nreturn [{json:authorizeUtm7(${ref(auth)},$input.first().json,${ref(normal)}.payload)}];`,
 );
 const dispatch = sql(
   "dispatch",
   db,
-  "SELECT utm7.dispatch($1::jsonb->>'user_id',$1::jsonb->'payload') AS response;",
+  "SELECT utm7.authorize_and_dispatch($1::jsonb->>'user_id',($1::jsonb->>'authorized')::boolean,$1::jsonb->'payload') AS response;",
   "JSON.stringify($json)",
 );
 const choose = code(
@@ -335,7 +372,8 @@ const finishBudget = code(
 );
 connect(webhook, normalize);
 connect(normalize, authenticate);
-connect(authenticate, identify);
+connect(authenticate, access);
+connect(access, identify);
 connect(identify, dispatch);
 connect(dispatch, choose);
 connect(choose, route);
@@ -374,7 +412,9 @@ const exprValue = (v) =>
 let sdk = "import {workflow,node,trigger,expr} from '@n8n/workflow-sdk';\n";
 const samples = {
   normalize: { token: "", payload: {} },
-  identify: { user_id: "", payload: {} },
+  authenticate: { statusCode: 401, body: {} },
+  access: { statusCode: 401, body: [] },
+  identify: { user_id: "", authorized: false, payload: {} },
   dispatch: { response: { ok: false, status: 403 } },
   choose: { route: 3, response: { ok: false, status: 403 } },
   route: { route: 3, response: { ok: false, status: 403 } },
@@ -394,7 +434,7 @@ sdk += "export default workflow('m7-utm7-api','UTM7 | API privada de atribuiçã
 for (const l of links)
   sdk += `\n.add(${l.a}${l.output === undefined ? "" : `.output(${l.output})`}.to(${l.b}))`;
 sdk +=
-  "\n.group('Acesso privado',[normalize,authenticate,identify,dispatch,choose],{description:'Valida a sessão M7 e a permissão real de administrador antes de consultar dados.'})";
+  "\n.group('Acesso privado',[normalize,authenticate,access,identify,dispatch,choose],{description:'Valida sessão e perfil ativo de administrador no mesmo Supabase do M7 antes de consultar dados.'})";
 sdk +=
   "\n.group('Sheets e atribuição',[sheets,aggregate],{description:'Lê tracking e vendas, elimina testes e duplicatas e calcula o funil por anúncio.'})";
 sdk +=

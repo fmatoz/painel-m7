@@ -28,10 +28,17 @@ CREATE TABLE IF NOT EXISTS utm7.audit (
  status text NOT NULL DEFAULT 'prepared', created_at timestamptz NOT NULL DEFAULT now(),
  completed_at timestamptz
 );
+-- Private, short-lived identity bridge. Only n8n writes after live Supabase checks.
+-- The metrics database's public.app_users is legacy and is not an auth source.
+CREATE TABLE IF NOT EXISTS utm7.admin_identities (
+ user_id uuid PRIMARY KEY, active boolean NOT NULL,
+ verified_at timestamptz NOT NULL DEFAULT now()
+);
 ALTER TABLE utm7.offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE utm7.admin_identities ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA utm7 FROM PUBLIC, anon, authenticated;
 
 INSERT INTO utm7.offers(id,name,product_id,pixel_id,price,landing_url,checkout_url,tracking_names)
@@ -44,9 +51,9 @@ UPDATE utm7.offers SET campaign_ids='["120255050101070580"]'::jsonb
 WHERE id='7c0dbd4a-dff7-4c73-bccb-a6466aff5401' AND campaign_ids='[]'::jsonb;
 
 CREATE OR REPLACE FUNCTION utm7.is_admin(uid text) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public AS $$
- SELECT EXISTS(SELECT 1 FROM public.app_users
- WHERE user_id::text=uid AND active=true AND is_admin=true);
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,utm7 AS $$
+ SELECT EXISTS(SELECT 1 FROM utm7.admin_identities
+ WHERE user_id::text=uid AND active=true AND verified_at>now()-interval '5 minutes');
 $$;
 
 CREATE OR REPLACE FUNCTION utm7.dispatch(uid text,p jsonb) RETURNS jsonb
@@ -164,6 +171,21 @@ BEGIN
  UPDATE utm7.audit SET status=CASE WHEN success THEN 'confirmed' ELSE 'failed' END,completed_at=now()
  WHERE id=rid AND user_id::text=uid AND status='prepared';
  RETURN jsonb_build_object('ok',success,'data',jsonb_build_object('request_id',rid));
+END;
+$$;
+CREATE OR REPLACE FUNCTION utm7.authorize_and_dispatch(uid text,verified_admin boolean,p jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,utm7 AS $$
+BEGIN
+ IF coalesce(uid,'') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+  RETURN jsonb_build_object('ok',false,'status',401,'error','Sua sessão expirou. Entre novamente no M7.');
+ END IF;
+ IF verified_admin IS NOT TRUE THEN
+  UPDATE utm7.admin_identities SET active=false WHERE user_id=uid::uuid;
+  RETURN jsonb_build_object('ok',false,'status',403,'error','Acesso exclusivo de administradores ativos.');
+ END IF;
+ INSERT INTO utm7.admin_identities(user_id,active,verified_at) VALUES(uid::uuid,true,now())
+ ON CONFLICT(user_id) DO UPDATE SET active=true,verified_at=now();
+ RETURN utm7.dispatch(lower(uid),p);
 END;
 $$;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA utm7 FROM PUBLIC,anon,authenticated;
