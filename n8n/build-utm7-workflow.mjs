@@ -52,7 +52,7 @@ const normalize = code(
   normal,
   `const incoming=$input.first().json;let p=incoming.body||{};if(typeof p==='string'){try{p=JSON.parse(p);}catch{p={};}}
 if(!p||typeof p!=='object'||Array.isArray(p))p={};
-const actions=['dashboard','save_offer','save_connection','sync_meta','prepare_budget'];
+const actions=['dashboard','save_offer','save_connection','sync_meta','prepare_budget','prepare_status'];
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const clean=Object.fromEntries(Object.entries(p).filter(([k])=>!['token','user_id','internal','authorized','is_admin','active'].includes(k)));
 clean.action=actions.includes(p.action)?p.action:'invalid';clean.since=/^\\d{4}-\\d{2}-\\d{2}$/.test(p.since||'')?p.since:today;clean.until=/^\\d{4}-\\d{2}-\\d{2}$/.test(p.until||'')?p.until:today;
@@ -123,12 +123,12 @@ const choose = code(
   "choose",
   "Escolher operação autorizada",
   `const response=$input.first().json.response||{ok:false,status:503,error:'Armazenamento indisponível.'};const action=${request}.action;
-const route=response.ok?(action==='dashboard'?0:action==='sync_meta'?1:action==='prepare_budget'?2:3):3;
+const route=response.ok?(action==='dashboard'?0:action==='sync_meta'?1:action==='prepare_budget'?2:action==='prepare_status'?3:4):4;
 return [{json:{route,response}}];`,
 );
 const route = add("route", "n8n-nodes-base.switch", 3.5, "Rotear operação", {
   mode: "expression",
-  numberOutputs: 4,
+  numberOutputs: 5,
   output: e("{{ $json.route }}"),
 });
 const respond = add("respond", "n8n-nodes-base.respondToWebhook", 1.5, "Responder UTM7", {
@@ -370,6 +370,94 @@ const finishBudget = code(
   "Retornar resultado orçamento",
   `const audit=$input.first().json.response,r=$('Preparar auditoria orçamento').first().json;return [{json:{response:r.success?audit:{ok:false,status:r.status||502,error:r.error||'Não foi possível confirmar a alteração. Consulte a Meta antes de repetir.'}}}];`,
 );
+const liveStatus = add(
+  "liveStatus",
+  "n8n-nodes-base.httpRequest",
+  4.5,
+  "Conferir veiculação atual na Meta",
+  {
+    method: "GET",
+    url: e(`https://graph.facebook.com/v25.0/{{ ${request}.entity_id }}`),
+    authentication: "none",
+    sendQuery: true,
+    queryParameters: {
+      parameters: [
+        {
+          name: "fields",
+          value: e(
+            `{{ 'id,account_id,status,effective_status' + (${request}.level !== 'campaign' ? ',campaign{id,status}' : '') + (${request}.level === 'ad' ? ',adset{id,status}' : '') }}`,
+          ),
+        },
+      ],
+    },
+    sendHeaders: true,
+    headerParameters: {
+      parameters: [{ name: "Authorization", value: e(`Bearer {{ ${internal}.access_token }}`) }],
+    },
+    options: {
+      response: { response: { neverError: true, responseFormat: "json" } },
+      timeout: 12000,
+    },
+  },
+  { onError: "continueRegularOutput" },
+);
+const statusGuard = readFileSync(path.join(root, "../src/lib/utm7-status.mjs"), "utf8").replace(
+  /^export /gm,
+  "",
+);
+const checkStatus = code(
+  "checkStatus",
+  "Validar confirmação de veiculação",
+  statusGuard +
+    `\nconst response=verifyStatus($input.first().json,${request},${internal});return [{json:{route:response.ok?0:1,response:response.ok?null:response}}];`,
+);
+const statusRoute = add("statusRoute", "n8n-nodes-base.switch", 3.5, "Veiculação confere?", {
+  mode: "expression",
+  numberOutputs: 2,
+  output: e("{{ $json.route }}"),
+});
+const postStatus = add(
+  "postStatus",
+  "n8n-nodes-base.httpRequest",
+  4.5,
+  "Aplicar veiculação confirmada",
+  {
+    method: "POST",
+    url: e(`https://graph.facebook.com/v25.0/{{ ${request}.entity_id }}`),
+    authentication: "none",
+    sendHeaders: true,
+    headerParameters: {
+      parameters: [{ name: "Authorization", value: e(`Bearer {{ ${internal}.access_token }}`) }],
+    },
+    sendBody: true,
+    contentType: "form-urlencoded",
+    bodyParameters: {
+      parameters: [{ name: "status", value: e(`{{ ${request}.desired_status }}`) }],
+    },
+    options: {
+      response: { response: { neverError: true, responseFormat: "json" } },
+      timeout: 15000,
+    },
+  },
+  { onError: "continueRegularOutput" },
+);
+const statusResult = code(
+  "statusResult",
+  "Preparar auditoria veiculação",
+  `const result=$input.first().json;return [{json:{user_id:${ref(gate)}.user_id,request_id:${request}.request_id,success:result.success===true,previous_status:$('Conferir veiculação atual na Meta').first().json.status||'',status:result.response?.status||502,error:result.response?.error||(result.error?'Meta: '+String(result.error.message||'Não foi possível confirmar a alteração.').slice(0,300):'Não foi possível confirmar a alteração. Sincronize antes de repetir.')}}];`,
+);
+const statusAudit = sql(
+  "statusAudit",
+  "Registrar resultado veiculação",
+  "SELECT utm7.finish_status($1::jsonb->>'user_id',($1::jsonb->>'request_id')::uuid,($1::jsonb->>'success')::boolean,$1::jsonb->>'previous_status') AS response;",
+  "JSON.stringify($json)",
+);
+const finishStatus = code(
+  "finishStatus",
+  "Retornar resultado veiculação",
+  `const audit=$input.first().json.response,r=$('Preparar auditoria veiculação').first().json;return [{json:{response:r.success?audit:{ok:false,status:r.status||502,error:r.error}}}];`,
+);
+
 connect(webhook, normalize);
 connect(normalize, authenticate);
 connect(authenticate, access);
@@ -398,7 +486,16 @@ connect(postBudget, budgetResult);
 connect(budgetResult, audit);
 connect(audit, finishBudget);
 connect(finishBudget, respond);
-connect(route, respond, 3);
+connect(route, liveStatus, 3);
+connect(liveStatus, checkStatus);
+connect(checkStatus, statusRoute);
+connect(statusRoute, postStatus, 0);
+connect(statusRoute, statusResult, 1);
+connect(postStatus, statusResult);
+connect(statusResult, statusAudit);
+connect(statusAudit, finishStatus);
+connect(finishStatus, respond);
+connect(route, respond, 4);
 const exprValue = (v) =>
   typeof v === "string" && v.startsWith("=")
     ? `expr(${JSON.stringify(v.slice(1))})`
@@ -416,14 +513,18 @@ const samples = {
   access: { statusCode: 401, body: [] },
   identify: { user_id: "", authorized: false, payload: {} },
   dispatch: { response: { ok: false, status: 403 } },
-  choose: { route: 3, response: { ok: false, status: 403 } },
-  route: { route: 3, response: { ok: false, status: 403 } },
+  choose: { route: 4, response: { ok: false, status: 403 } },
+  route: { route: 4, response: { ok: false, status: 403 } },
   aggregate: { response: { ok: true, data: {} } },
   save: { response: { ok: true, data: {} } },
   checkBudget: { route: 1, response: { ok: false, status: 409 } },
   budgetRoute: { route: 1, response: { ok: false, status: 409 } },
   audit: { response: { ok: true, data: {} } },
   finishBudget: { response: { ok: true, data: {} } },
+  checkStatus: { route: 1, response: { ok: false, status: 409 } },
+  statusRoute: { route: 1, response: { ok: false, status: 409 } },
+  statusAudit: { response: { ok: true, data: {} } },
+  finishStatus: { response: { ok: true, data: {} } },
 };
 for (const n of nodes) {
   n.output = [samples[n.id] || {}];
@@ -434,13 +535,13 @@ sdk += "export default workflow('m7-utm7-api','UTM7 | API privada de atribuiçã
 for (const l of links)
   sdk += `\n.add(${l.a}${l.output === undefined ? "" : `.output(${l.output})`}.to(${l.b}))`;
 sdk +=
-  "\n.group('Acesso privado',[normalize,authenticate,access,identify,dispatch,choose],{description:'Valida sessão e perfil ativo de administrador no mesmo Supabase do M7 antes de consultar dados.'})";
+  "\n.group('Acesso privado',[normalize,authenticate,access,identify,dispatch,choose,route],{description:'Valida sessão e perfil ativo de administrador no mesmo Supabase do M7 antes de consultar dados.'})";
 sdk +=
   "\n.group('Sheets e atribuição',[sheets,aggregate],{description:'Lê tracking e vendas, elimina testes e duplicatas e calcula o funil por anúncio.'})";
 sdk +=
   "\n.group('Sincronização Meta',[account,sets,day,period_campaign,period_adset,period_ad,pack,save],{description:'Consulta a Marketing API por nível e período e salva cache sem expor o token ao navegador.'})";
 sdk +=
-  "\n.group('Orçamento com confirmação',[liveBudget,checkBudget,budgetRoute,postBudget,budgetResult,audit,finishBudget],{description:'Confere conta, valor atual e confirmação; aplica orçamento e registra resultado sem mudar status.'});\n";
+  "\n.group('Orçamento com confirmação',[liveBudget,checkBudget,budgetRoute,postBudget,budgetResult,audit,finishBudget],{description:'Confere conta, valor atual e confirmação; aplica orçamento e registra resultado sem mudar status.'})\n.group('Veiculação com confirmação',[liveStatus,checkStatus,statusRoute,postStatus,statusResult,statusAudit,finishStatus],{description:'Confere item, conta, estado atual e pais antes de ativar ou pausar, com auditoria privada.'});\n";
 writeFileSync(path.join(root, "utm7-api.workflow.js"), sdk);
 writeFileSync(path.join(root, "../.workspace-utm7-nodes.json"), JSON.stringify(nodes));
 console.log(`Generated ${nodes.length} nodes, ${sdk.length} bytes`);

@@ -16,6 +16,38 @@ export function moveColumn(order, from, to) {
   return next;
 }
 
+export function funnelGeometry(values) {
+  const volumes = values.map((v) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null,
+  );
+  const maximum = Math.max(1, ...volumes.map((v) => v ?? 0));
+  const heights = volumes.map((v) => ((v ?? 0) / maximum) * 92);
+  const width = volumes.length * 220;
+  const side = (sign) => heights.map((h) => 120 + sign * h);
+  const top = side(-1),
+    bottom = side(1);
+  let path = `M0,${top[0] ?? 120}`;
+  for (let i = 0; i < volumes.length; i++) {
+    const end = (i + 1) * 220;
+    path += ` L${i === volumes.length - 1 ? end : end - 45},${top[i]}`;
+    if (i < volumes.length - 1)
+      path += ` C${end},${top[i]} ${end},${top[i + 1]} ${end + 45},${top[i + 1]}`;
+  }
+  path += ` L${width},${bottom.at(-1) ?? 120}`;
+  for (let i = volumes.length - 1; i >= 0; i--) {
+    const start = i * 220;
+    path += ` L${i === 0 ? 0 : start + 45},${bottom[i]}`;
+    if (i > 0)
+      path += ` C${start},${bottom[i]} ${start},${bottom[i - 1]} ${start - 45},${bottom[i - 1]}`;
+  }
+  return {
+    width,
+    path: path + " Z",
+    heights,
+    percentages: volumes.map((v) => (volumes[0] > 0 && v != null ? (v / volumes[0]) * 100 : null)),
+  };
+}
+
 export function filterMetricRows(rows, search, activeOnly) {
   const term = search.trim().toLocaleLowerCase("pt-BR");
   return rows.filter(

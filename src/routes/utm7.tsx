@@ -49,7 +49,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppAccess } from "@/hooks/use-access";
 import { utm7Api } from "@/lib/utm7-api";
+import { bulkBudgetTargets, runBulkOperations, type BulkResult } from "@/lib/utm7-bulk.mjs";
 import {
+  funnelGeometry,
   columnPreferences,
   moveColumn,
   filterMetricRows,
@@ -255,6 +257,17 @@ function Utm7() {
   const [budget, setBudget] = useState<MetricRow | null>(null),
     [saving, setSaving] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<{
+    action: "budget" | "ACTIVE" | "PAUSED";
+    rows: MetricRow[];
+    level: Level;
+    sourceCount: number;
+  } | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => {
+    setSelected(new Set());
+  }, [level, offerId, connectionId, campaignId, adsetId, since, until, activeOnly, search]);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("utm7:columns:v2") || "null");
@@ -383,6 +396,25 @@ function Utm7() {
     );
   });
   const filteredTotals = summarizeMetricRows(filtered);
+  const selectable = filtered.filter((r) => /^\d{5,30}$/.test(r.id));
+  const selectedRows = selectable.filter((r) => selected.has(r.id));
+  const openBulk = (action: "budget" | "ACTIVE" | "PAUSED") => {
+    if (!selectedRows.length || !connectionId) return;
+    try {
+      const rows =
+        action === "budget"
+          ? bulkBudgetTargets(selectedRows, level, data?.tables.adset || [])
+          : selectedRows.map((r) => ({ ...r }));
+      setBulk({
+        action,
+        rows,
+        level: action === "budget" ? "adset" : level,
+        sourceCount: selectedRows.length,
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const changeLevel = (next: Level) => {
     setLevel(next);
     setTab("campaigns");
@@ -997,10 +1029,68 @@ function Utm7() {
                       </button>
                     </div>
                   )}
+                  {selectedRows.length > 0 && (
+                    <div className="u-bulk-bar">
+                      <strong>{selectedRows.length} selecionados</strong>
+                      <button
+                        className="u-button"
+                        disabled={!connectionId}
+                        onClick={() => openBulk("ACTIVE")}
+                      >
+                        Ativar selecionados
+                      </button>
+                      <button
+                        className="u-button"
+                        disabled={!connectionId}
+                        onClick={() => openBulk("PAUSED")}
+                      >
+                        Pausar selecionados
+                      </button>
+                      <button
+                        className="u-button"
+                        disabled={!connectionId || level === "campaign"}
+                        title={
+                          level === "campaign"
+                            ? "O orçamento diário é editado nos conjuntos (ABO)."
+                            : "Definir orçamento diário por conjunto"
+                        }
+                        onClick={() => openBulk("budget")}
+                      >
+                        Editar orçamento
+                      </button>
+                      <button className="u-text-button" onClick={() => setSelected(new Set())}>
+                        Limpar seleção
+                      </button>
+                    </div>
+                  )}
                   <div className="u-table-scroll">
-                    <table className="u-table">
+                    <table className="u-table u-selectable">
                       <thead>
                         <tr>
+                          <th className="u-selection-cell">
+                            <input
+                              type="checkbox"
+                              aria-label="Selecionar até 50 itens visíveis"
+                              disabled={!selectable.length}
+                              checked={
+                                selectable.length > 0 &&
+                                selectedRows.length === Math.min(50, selectable.length)
+                              }
+                              ref={(el) => {
+                                if (el)
+                                  el.indeterminate =
+                                    selectedRows.length > 0 &&
+                                    selectedRows.length < Math.min(50, selectable.length);
+                              }}
+                              onChange={(e) =>
+                                setSelected(
+                                  e.target.checked
+                                    ? new Set(selectable.slice(0, 50).map((r) => r.id))
+                                    : new Set(),
+                                )
+                              }
+                            />
+                          </th>
                           <th className="u-sticky">
                             <button
                               onClick={() =>
@@ -1038,6 +1128,25 @@ function Utm7() {
                       <tbody>
                         {filtered.map((r) => (
                           <tr key={r.id}>
+                            <td className="u-selection-cell">
+                              <input
+                                type="checkbox"
+                                aria-label={`Selecionar ${r.name}`}
+                                disabled={
+                                  !/^\d{5,30}$/.test(r.id) ||
+                                  (!selected.has(r.id) && selectedRows.length >= 50)
+                                }
+                                checked={selected.has(r.id)}
+                                onChange={(e) =>
+                                  setSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(r.id);
+                                    else next.delete(r.id);
+                                    return next;
+                                  })
+                                }
+                              />
+                            </td>
                             <td className="u-sticky">
                               <button
                                 className="u-entity-name"
@@ -1092,6 +1201,7 @@ function Utm7() {
                       {filtered.length > 0 && (
                         <tfoot>
                           <tr>
+                            <td className="u-selection-cell" />
                             <td className="u-sticky">
                               {filtered.length}{" "}
                               {level === "ad"
@@ -1136,7 +1246,7 @@ function Utm7() {
                     <section className="u-panel">
                       <PanelTitle
                         title="Jornada de compra"
-                        sub="Visitas e IC deduplicados por navegador/sessão e dia"
+                        sub="Da primeira visita ao pagamento aprovado"
                       />
                       <MiniFunnel metrics={m!} hasMeta={hasMeta} />
                       <div className="u-funnel-costs">
@@ -1454,6 +1564,48 @@ function Utm7() {
           </footer>
         </div>
       </main>
+      <Dialog
+        open={Boolean(bulk)}
+        onOpenChange={(open) => {
+          if (!open && !bulkBusy) setBulk(null);
+        }}
+      >
+        <DialogContent
+          data-u-theme={theme}
+          className="u-dialog u-dialog-wide"
+          onEscapeKeyDown={(e) => {
+            if (bulkBusy) e.preventDefault();
+          }}
+          onPointerDownOutside={(e) => {
+            if (bulkBusy) e.preventDefault();
+          }}
+        >
+          <DialogTitle>
+            {bulk?.action === "budget"
+              ? "Editar orçamento em massa"
+              : bulk?.action === "ACTIVE"
+                ? "Ativar itens selecionados"
+                : "Pausar itens selecionados"}
+          </DialogTitle>
+          <DialogDescription>
+            Confira os itens antes de confirmar. As alterações serão enviadas à conta Meta
+            selecionada.
+          </DialogDescription>
+          {bulk && session && (
+            <BulkEditor
+              key={bulk.action + bulk.rows.map((r) => r.id).join(",")}
+              batch={bulk}
+              token={session.access_token}
+              connectionId={connectionId}
+              onBusy={setBulkBusy}
+              onSettled={async () => {
+                setSelected(new Set());
+                await sync();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={colDialog} onOpenChange={setColDialog}>
         <DialogContent data-u-theme={theme} className="u-dialog">
           <DialogTitle>Suas colunas, do seu jeito</DialogTitle>
@@ -1572,6 +1724,163 @@ function Utm7() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function BulkEditor({
+  batch,
+  token,
+  connectionId,
+  onBusy,
+  onSettled,
+}: {
+  batch: {
+    action: "budget" | "ACTIVE" | "PAUSED";
+    rows: MetricRow[];
+    level: Level;
+    sourceCount: number;
+  };
+  token: string;
+  connectionId: string;
+  onBusy: (busy: boolean) => void;
+  onSettled: () => Promise<void>;
+}) {
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<BulkResult[]>([]);
+  const [phase, setPhase] = useState("");
+  const validAmount = /^\d+(?:[.,]\d{1,2})?$/.test(amount);
+  const minor = validAmount ? Math.round(Number(amount.replace(",", ".")) * 100) : 0;
+  const valid = batch.action !== "budget" || (minor >= 100 && minor <= 1000000);
+  const failures = results.filter((r) => !r.ok);
+  const unit =
+    batch.level === "ad" ? "anúncios" : batch.level === "adset" ? "conjuntos" : "campanhas";
+  const execute = async (retry = false) => {
+    if (!valid || busy) return;
+    const items = retry
+      ? batch.rows.filter((r) => failures.some((f) => f.id === r.id))
+      : batch.rows;
+    setBusy(true);
+    onBusy(true);
+    setPhase("Enviando alterações…");
+    const previous = retry ? results.filter((r) => r.ok) : [];
+    try {
+      await runBulkOperations(
+        items,
+        (r) =>
+          utm7Api(
+            token,
+            batch.action === "budget"
+              ? {
+                  action: "prepare_budget",
+                  connection_id: connectionId,
+                  adset_id: r.id,
+                  expected_budget_minor: r.budgetMinor,
+                  new_budget_minor: minor,
+                  confirmed: true,
+                  request_id: crypto.randomUUID(),
+                }
+              : {
+                  action: "prepare_status",
+                  connection_id: connectionId,
+                  entity_id: r.id,
+                  level: batch.level,
+                  expected_status: r.status,
+                  desired_status: batch.action,
+                  confirmed: true,
+                  request_id: crypto.randomUUID(),
+                },
+          ),
+        (progress) => setResults([...previous, ...progress]),
+      );
+      setPhase("Atualizando os dados da Meta…");
+      await onSettled();
+      setPhase("Processamento concluído");
+    } catch (e) {
+      setPhase((e as Error).message);
+    } finally {
+      setBusy(false);
+      onBusy(false);
+    }
+  };
+  return (
+    <div className="u-bulk-editor">
+      <p className="u-note">
+        {batch.rows.length} {unit} afetados
+        {batch.action === "budget" && batch.sourceCount !== batch.rows.length
+          ? ` pelos ${batch.sourceCount} anúncios selecionados`
+          : ""}
+        .{" "}
+        {batch.action === "budget"
+          ? "O valor será aplicado a cada conjunto; outros anúncios desses conjuntos compartilham o orçamento."
+          : batch.action === "ACTIVE"
+            ? batch.level === "ad"
+              ? "A ativação não altera o orçamento dos itens."
+              : "Ativar campanhas ou conjuntos pode liberar a veiculação dos anúncios dependentes já ativos. O orçamento permanece igual."
+            : batch.level === "ad"
+              ? "A pausa será aplicada somente aos anúncios listados."
+              : "Pausar campanhas ou conjuntos também interrompe a veiculação dos anúncios dependentes."}
+      </p>
+      {batch.action === "budget" && (
+        <label className="u-bulk-amount">
+          Novo orçamento diário por conjunto (R$)
+          <input
+            inputMode="decimal"
+            value={amount}
+            disabled={busy || results.length > 0}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Ex.: 20,00"
+          />
+          <small>
+            Total diário selecionado:{" "}
+            <strong>{valid ? money((minor / 100) * batch.rows.length) : "—"}</strong>
+          </small>
+        </label>
+      )}
+      <ul className="u-bulk-items">
+        {batch.rows.map((r) => {
+          const result = results.find((x) => x.id === r.id);
+          return (
+            <li key={r.id}>
+              <div>
+                <strong>{r.name}</strong>
+                <small>
+                  {r.id}
+                  {batch.action === "budget"
+                    ? ` · ${money((r.budgetMinor || 0) / 100)} → ${valid ? money(minor / 100) : "—"} /dia`
+                    : ` · ${statusLabel(r.status)} → ${batch.action === "ACTIVE" ? "Ativar" : "Pausar"}`}
+                </small>
+                {result?.error && <p>{result.error}</p>}
+              </div>
+              <span className={result?.ok ? "u-positive" : result ? "u-negative" : "u-muted"}>
+                {result ? (result.ok ? "Confirmado" : "Não confirmado") : "Aguardando"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="u-note" aria-live="polite">
+        {phase || "Nenhuma alteração foi enviada."}
+        {results.length > 0 &&
+          ` · ${results.filter((r) => r.ok).length} confirmados · ${failures.length} não confirmados`}
+      </p>
+      {!results.length && (
+        <button
+          className="u-button u-primary u-full"
+          disabled={!valid || busy}
+          onClick={() => void execute()}
+        >
+          {busy
+            ? "Enviando…"
+            : `Confirmar ${batch.action === "budget" ? "orçamento" : batch.action === "ACTIVE" ? "ativação" : "pausa"} de ${batch.rows.length} ${unit}`}
+        </button>
+      )}
+      {!busy && failures.length > 0 && (
+        <button className="u-button u-full" onClick={() => void execute(true)}>
+          Confirmar nova tentativa dos {failures.length} não confirmados
+        </button>
+      )}
     </div>
   );
 }
@@ -1764,87 +2073,82 @@ function Empty({ title, text }: { title: string; text: string }) {
 }
 function MiniFunnel({ metrics: m, hasMeta }: { metrics: Metrics; hasMeta: boolean }) {
   const gradientId = useId().replace(/:/g, "");
-  const rows = [
-    { label: "Cliques no link", value: hasMeta ? m.clicks : null, color: "purple" },
-    { label: "Visitas únicas/dia", value: m.visitors, color: "blue" },
-    { label: "Compras iniciadas", value: m.checkouts, color: "teal" },
-    { label: "Compras aprovadas", value: m.purchases, color: "green" },
-  ];
-  const shades = [
-    ["#b925df", "#7757e8"],
-    ["#7953e2", "#317ed8"],
-    ["#2872bd", "#178e9d"],
-    ["#147466", "#16795e"],
-  ];
+  const rows = hasMeta
+    ? [
+        { label: "Cliques no link", value: m.clicks },
+        { label: "Vis. página (Meta)", value: m.metaLpViews },
+        { label: "Compras iniciadas", value: m.checkouts },
+        { label: "Compras aprovadas", value: m.purchases },
+      ]
+    : [
+        { label: "Visitas únicas/dia", value: m.visitors },
+        { label: "Compras iniciadas", value: m.checkouts },
+        { label: "Compras aprovadas", value: m.purchases },
+      ];
+  const graph = funnelGeometry(rows.map((r) => r.value));
   return (
     <figure className="u-graphic-funnel">
-      <div className="u-funnel-drawing">
-        <svg
-          viewBox="0 0 140 316"
-          role="img"
-          aria-label={rows.map((r) => `${r.label}: ${integer(r.value)}`).join("; ")}
+      <div
+        className="u-horizontal-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Funil de conversão horizontal"
+      >
+        <div
+          className="u-horizontal-funnel"
+          style={{ "--u-stages": rows.length } as React.CSSProperties}
         >
-          <defs>
-            {shades.map(([a, b], i) => (
-              <linearGradient key={i} id={`${gradientId}-${i}`} x1="0" x2="1" y1="0" y2="1">
-                <stop stopColor={a} />
-                <stop offset="1" stopColor={b} />
-              </linearGradient>
-            ))}
-          </defs>
-          {rows.map((r, i) => {
-            const inset = 8 + i * 11,
-              y = 12 + i * 75;
-            return (
-              <g key={r.label} className={r.value ? "" : "u-funnel-zero"}>
-                <path
-                  d={`M${inset},${y} H${140 - inset} L${129 - inset},${y + 63} Q70,${y + 76} ${inset + 11},${y + 63} Z`}
-                  fill={r.value ? `url(#${gradientId}-${i})` : "var(--u-surface)"}
-                />
-                <text
-                  x="70"
-                  y={y + 37}
-                  textAnchor="middle"
-                  style={{
-                    fontSize: Math.max(9, 23 - Math.max(0, integer(r.value).length - 3) * 2),
-                  }}
-                >
-                  {integer(r.value)}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-        <ol className="u-funnel-stages">
-          {rows.map((r, i) => {
-            const prev = rows[i - 1]?.value;
-            return (
-              <li key={r.label}>
-                <span className={`u-stage-dot u-${r.color}`} />
-                <div>
-                  <span>{r.label}</span>
-                  <strong>{integer(r.value)}</strong>
-                  <small>
-                    {i === 0
-                      ? "Fonte: Meta Ads"
-                      : i === 1
-                        ? "Todos os acessos identificados"
-                        : prev && r.value != null
-                          ? `${pct((r.value / prev) * 100)} da etapa anterior`
-                          : "Sem base de conversão"}
-                  </small>
+          <div className="u-flow-plot">
+            <svg
+              viewBox={`0 0 ${graph.width} 240`}
+              preserveAspectRatio="none"
+              role="img"
+              aria-label={rows
+                .map((r, i) => `${r.label}: ${integer(r.value)}, ${pct(graph.percentages[i])}`)
+                .join("; ")}
+            >
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stopColor="#185ee8" />
+                  <stop offset=".35" stopColor="#6550dd" />
+                  <stop offset=".7" stopColor="#8f3dd5" />
+                  <stop offset=".82" stopColor="#167b70" />
+                  <stop offset="1" stopColor="#167b70" />
+                </linearGradient>
+              </defs>
+              <path d={graph.path} fill={`url(#${gradientId})`} />
+            </svg>
+            <div className="u-flow-rates" aria-hidden="true">
+              {rows.map((r, i) => (
+                <div key={r.label}>
+                  <span className={graph.heights[i] < 20 ? "u-flow-small" : ""}>
+                    {pct(graph.percentages[i])}
+                  </span>
                 </div>
+              ))}
+            </div>
+          </div>
+          <ol className="u-flow-labels">
+            {rows.map((r, i) => (
+              <li key={r.label}>
+                <strong>{integer(r.value)}</strong>
+                <span>{r.label}</span>
+                <small className="sr-only">{pct(graph.percentages[i])} da primeira etapa</small>
               </li>
-            );
-          })}
-        </ol>
+            ))}
+          </ol>
+        </div>
       </div>
       <figcaption>
-        Cliques da Meta; visitas incluem outros acessos. As faixas mostram a sequência das etapas.
+        Percentuais sobre {hasMeta ? "os cliques" : "as visitas"}.{" "}
+        {hasMeta
+          ? "Cliques e visitas: Meta Ads · IC e pagamentos: rastreamento no Sheets."
+          : "Visitas, IC e pagamentos registrados no Sheets."}
       </figcaption>
     </figure>
   );
 }
+
 function OfferForm({
   offer,
   saving,

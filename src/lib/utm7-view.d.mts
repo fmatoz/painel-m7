@@ -6,6 +6,12 @@ export function columnPreferences(
   defaults: string[],
 ): ColumnPreferences;
 export function moveColumn(order: string[], from: string, to: string): string[];
+export function funnelGeometry(values: (number | null)[]): {
+  width: number;
+  path: string;
+  heights: number[];
+  percentages: (number | null)[];
+};
 export function filterMetricRows(
   rows: MetricRow[],
   search: string,

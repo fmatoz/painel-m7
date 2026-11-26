@@ -34,11 +34,19 @@ CREATE TABLE IF NOT EXISTS utm7.admin_identities (
  user_id uuid PRIMARY KEY, active boolean NOT NULL,
  verified_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS utm7.status_audit (
+ id uuid PRIMARY KEY, user_id uuid NOT NULL, connection_id uuid NOT NULL,
+ entity_id text NOT NULL, entity_level text NOT NULL,
+ desired_status text NOT NULL CHECK(desired_status IN ('ACTIVE','PAUSED')),
+ expected_status text NOT NULL, previous_status text,
+ status text NOT NULL DEFAULT 'prepared', created_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz
+);
 ALTER TABLE utm7.offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.audit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm7.admin_identities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE utm7.status_audit ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA utm7 FROM PUBLIC, anon, authenticated;
 
 INSERT INTO utm7.offers(id,name,product_id,pixel_id,price,landing_url,checkout_url,tracking_names)
@@ -105,7 +113,7 @@ BEGIN
    access_token=excluded.access_token,updated_at=now();
   DELETE FROM utm7.reports WHERE connection_id=cid;
   RETURN jsonb_build_object('ok',true,'data',jsonb_build_object('id',cid));
- ELSIF a IN ('sync_meta','prepare_budget') THEN
+ ELSIF a IN ('sync_meta','prepare_budget','prepare_status') THEN
   cid:=(p->>'connection_id')::uuid;
   SELECT * INTO c FROM utm7.connections WHERE id=cid;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'status',400,'error','Cadastre a conta Meta primeiro.'); END IF;
@@ -122,6 +130,22 @@ BEGIN
    END IF;
    INSERT INTO utm7.audit(id,user_id,connection_id,adset_id,previous_budget,new_budget)
    VALUES(request_id,uid::uuid,cid,p->>'adset_id',old_b,b);
+  END IF;
+  IF a='prepare_status' THEN
+   IF coalesce((p->>'confirmed')::boolean,false) IS NOT TRUE
+    OR coalesce(p->>'level','') NOT IN ('campaign','adset','ad')
+    OR coalesce(p->>'desired_status','') NOT IN ('ACTIVE','PAUSED')
+    OR coalesce(p->>'entity_id','') !~ '^[0-9]{5,30}$'
+    OR coalesce(p->>'request_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR length(coalesce(p->>'expected_status','')) NOT BETWEEN 2 AND 60 THEN
+    RETURN jsonb_build_object('ok',false,'status',400,'error','Confirme uma alteração de veiculação válida.');
+   END IF;
+   request_id:=(p->>'request_id')::uuid;
+   IF EXISTS(SELECT 1 FROM utm7.status_audit WHERE id=request_id) THEN
+    RETURN jsonb_build_object('ok',false,'status',409,'error','Esta solicitação já foi processada. Sincronize antes de repetir.');
+   END IF;
+   INSERT INTO utm7.status_audit(id,user_id,connection_id,entity_id,entity_level,desired_status,expected_status)
+   VALUES(request_id,uid::uuid,cid,p->>'entity_id',p->>'level',p->>'desired_status',p->>'expected_status');
   END IF;
   RETURN jsonb_build_object('ok',true,'internal',jsonb_build_object(
    'connection_id',c.id,'account_id',c.account_id,'access_token',c.access_token));
@@ -186,6 +210,20 @@ BEGIN
  INSERT INTO utm7.admin_identities(user_id,active,verified_at) VALUES(uid::uuid,true,now())
  ON CONFLICT(user_id) DO UPDATE SET active=true,verified_at=now();
  RETURN utm7.dispatch(lower(uid),p);
+END;
+$$;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA utm7 FROM PUBLIC,anon,authenticated;
+CREATE OR REPLACE FUNCTION utm7.finish_status(uid text,rid uuid,success boolean,previous text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,utm7 AS $$
+DECLARE cid uuid;
+BEGIN
+ IF NOT utm7.is_admin(uid) THEN RETURN jsonb_build_object('ok',false,'status',403,'error','Acesso negado.'); END IF;
+ UPDATE utm7.status_audit SET status=CASE WHEN success THEN 'confirmed' ELSE 'unconfirmed' END,
+  previous_status=left(previous,60),completed_at=now()
+ WHERE id=rid AND user_id::text=uid AND status='prepared' RETURNING connection_id INTO cid;
+ IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'status',409,'error','Solicitação já finalizada ou indisponível.'); END IF;
+ IF success THEN DELETE FROM utm7.reports WHERE connection_id=cid; END IF;
+ RETURN jsonb_build_object('ok',success,'data',jsonb_build_object('request_id',rid));
 END;
 $$;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA utm7 FROM PUBLIC,anon,authenticated;

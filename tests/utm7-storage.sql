@@ -28,6 +28,18 @@ BEGIN
  r:=utm7.dispatch(uid,jsonb_build_object('action','save_connection','id',cid,'name','QA rolled back','account_id','233896209622152','access_token',''));
  IF r->>'ok'<>'true' OR (SELECT access_token FROM utm7.connections WHERE id=cid)<>token_before THEN RAISE EXCEPTION 'Blank token replaced existing secret'; END IF;
  IF EXISTS(SELECT 1 FROM information_schema.role_table_grants WHERE table_schema='utm7' AND grantee IN ('anon','authenticated','PUBLIC')) THEN RAISE EXCEPTION 'Private storage has public grants'; END IF;
+ r:=utm7.dispatch(uid,jsonb_build_object('action','prepare_status','connection_id',cid,'entity_id','120255051581740580','level','adset','desired_status','DELETED','expected_status','ACTIVE','confirmed',true,'request_id','00000000-0000-4000-8000-000000000008'));
+ IF r->>'ok'<>'false' THEN RAISE EXCEPTION 'Destructive status accepted'; END IF;
+ r:=utm7.dispatch(uid,jsonb_build_object('action','prepare_status','connection_id',cid,'entity_id','120255051581740580','level','adset','desired_status','PAUSED','expected_status','ACTIVE','confirmed',false,'request_id','00000000-0000-4000-8000-000000000008'));
+ IF r->>'ok'<>'false' THEN RAISE EXCEPTION 'Unconfirmed status accepted'; END IF;
+ r:=utm7.dispatch(uid,jsonb_build_object('action','prepare_status','connection_id',cid,'entity_id','120255051581740580','level','adset','desired_status','PAUSED','expected_status','ACTIVE','confirmed',true,'request_id','00000000-0000-4000-8000-000000000008'));
+ IF r->>'ok'<>'true' THEN RAISE EXCEPTION 'Valid status preparation failed'; END IF;
+ r:=utm7.dispatch(uid,jsonb_build_object('action','prepare_status','connection_id',cid,'entity_id','120255051581740580','level','adset','desired_status','PAUSED','expected_status','ACTIVE','confirmed',true,'request_id','00000000-0000-4000-8000-000000000008'));
+ IF r->>'status'<>'409' THEN RAISE EXCEPTION 'Repeated status request accepted'; END IF;
+ r:=utm7.finish_status(uid,'00000000-0000-4000-8000-000000000008',true,'ACTIVE');
+ IF r->>'ok'<>'true' THEN RAISE EXCEPTION 'Status audit finalization failed'; END IF;
+ r:=utm7.finish_status(uid,'00000000-0000-4000-8000-000000000008',true,'ACTIVE');
+ IF r->>'status'<>'409' THEN RAISE EXCEPTION 'Repeated status audit finalization accepted'; END IF;
  UPDATE utm7.admin_identities SET verified_at=now()-interval '6 minutes' WHERE user_id=uid::uuid;
  IF utm7.is_admin(uid) THEN RAISE EXCEPTION 'Expired private identity accepted'; END IF;
  r:=utm7.authorize_and_dispatch(uid,true,'{"action":"invalid"}');
