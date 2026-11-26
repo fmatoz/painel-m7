@@ -101,6 +101,29 @@ const shift = (date: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 type Tab = "overview" | "campaigns" | "funnel" | "offers" | "settings";
+type OverviewLayoutMode = "chart-funnel" | "funnel-chart" | "funnel-top" | "chart-top";
+const overviewLayouts: { value: OverviewLayoutMode; label: string; description: string }[] = [
+  {
+    value: "chart-funnel",
+    label: "Lado a lado: gráfico à esquerda",
+    description: "Gráfico e funil na mesma linha.",
+  },
+  {
+    value: "funnel-chart",
+    label: "Lado a lado: funil à esquerda",
+    description: "Funil e gráfico na mesma linha.",
+  },
+  {
+    value: "funnel-top",
+    label: "Funil acima do gráfico",
+    description: "Cada card ocupa uma linha inteira.",
+  },
+  {
+    value: "chart-top",
+    label: "Gráfico acima do funil",
+    description: "Cada card ocupa uma linha inteira.",
+  },
+];
 type Column = {
   key: keyof MetricRow;
   label: string;
@@ -257,6 +280,8 @@ function Utm7() {
   const [budget, setBudget] = useState<MetricRow | null>(null),
     [saving, setSaving] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [overviewLayout, setOverviewLayout] = useState<OverviewLayoutMode>("chart-funnel");
+  const [layoutDialog, setLayoutDialog] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState<{
     action: "budget" | "ACTIVE" | "PAUSED";
@@ -287,6 +312,9 @@ function Utm7() {
       );
       setTheme(localStorage.getItem("utm7:theme") === "light" ? "light" : "dark");
       setActiveOnly(localStorage.getItem("utm7:active-only") === "true");
+      const savedLayout = localStorage.getItem("utm7:overview-layout:v1");
+      if (overviewLayouts.some((o) => o.value === savedLayout))
+        setOverviewLayout(savedLayout as OverviewLayoutMode);
     } catch {}
   }, []);
   useEffect(() => {
@@ -607,6 +635,12 @@ function Utm7() {
               </p>
             </div>
             <div className="u-heading-actions">
+              {tab === "overview" && (
+                <button className="u-button u-layout-trigger" onClick={() => setLayoutDialog(true)}>
+                  <Settings2 size={16} />
+                  Organizar painel
+                </button>
+              )}
               <button
                 className="u-button"
                 onClick={() => query.refetch()}
@@ -789,8 +823,8 @@ function Utm7() {
                       icon={<BarChart3 />}
                     />
                   </div>
-                  <div className="u-chart-grid">
-                    <section className="u-panel u-chart-panel">
+                  <OverviewLayout layout={overviewLayout}>
+                    <section key="chart" className="u-panel u-chart-panel">
                       <PanelTitle
                         title="Receita × investimento"
                         sub="Acompanhe a evolução no período"
@@ -881,7 +915,7 @@ function Utm7() {
                         </span>
                       </div>
                     </section>
-                    <section className="u-panel">
+                    <section key="funnel" className="u-panel">
                       <PanelTitle
                         title="Funil de conversão"
                         sub="Da visita ao pagamento aprovado"
@@ -892,7 +926,7 @@ function Utm7() {
                         <ArrowUpRight size={15} />
                       </button>
                     </section>
-                  </div>
+                  </OverviewLayout>
                   <div className="u-bottom-grid">
                     <section className="u-panel">
                       <PanelTitle
@@ -1564,6 +1598,44 @@ function Utm7() {
           </footer>
         </div>
       </main>
+      <Dialog open={layoutDialog} onOpenChange={setLayoutDialog}>
+        <DialogContent data-u-theme={theme} className="u-dialog">
+          <DialogTitle>Organizar painel</DialogTitle>
+          <DialogDescription>
+            Escolha a posição do gráfico e do funil. Sua preferência fica salva neste navegador. No
+            celular, os cards ficam um abaixo do outro.
+          </DialogDescription>
+          <fieldset className="u-layout-options">
+            <legend className="sr-only">Disposição dos cards</legend>
+            {overviewLayouts.map((option) => (
+              <label
+                key={option.value}
+                className={overviewLayout === option.value ? "selected" : ""}
+              >
+                <input
+                  type="radio"
+                  name="overview-layout"
+                  value={option.value}
+                  checked={overviewLayout === option.value}
+                  onChange={() => {
+                    setOverviewLayout(option.value);
+                    try {
+                      localStorage.setItem("utm7:overview-layout:v1", option.value);
+                    } catch {}
+                  }}
+                />
+                <span>
+                  <strong>{option.label}</strong>
+                  <small>{option.description}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <button className="u-button u-primary u-full" onClick={() => setLayoutDialog(false)}>
+            Concluir organização
+          </button>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={Boolean(bulk)}
         onOpenChange={(open) => {
@@ -1724,6 +1796,21 @@ function Utm7() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function OverviewLayout({
+  layout,
+  children,
+}: {
+  layout: OverviewLayoutMode;
+  children: React.ReactNode[];
+}) {
+  const reverse = layout === "funnel-chart" || layout === "funnel-top";
+  return (
+    <div className="u-chart-grid" data-overview-layout={layout}>
+      {reverse ? [...children].reverse() : children}
     </div>
   );
 }

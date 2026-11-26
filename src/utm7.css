@@ -2301,6 +2301,78 @@ body:has(.utm7-app[data-u-theme="dark"]) [data-sonner-toast][data-type="error"] 
 .u-user {
   border-color: #303549;
 }
+.u-heading-actions {
+  flex-wrap: wrap;
+}
+.u-layout-options {
+  display: grid;
+  gap: 9px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.u-layout-options label {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--u-line);
+  border-radius: 9px;
+  background: var(--u-card);
+  cursor: pointer;
+}
+.u-layout-options label.selected {
+  border-color: var(--u-accent);
+  background: var(--u-accent-bg);
+}
+.u-layout-options input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #a25ee8;
+}
+.u-layout-options strong {
+  display: block;
+  font-size: 12px;
+  color: var(--u-ink);
+}
+.u-layout-options small {
+  display: block;
+  margin-top: 4px;
+  color: var(--u-muted);
+  font-size: 10px;
+}
+@media (min-width: 1151px) {
+  .u-chart-grid[data-overview-layout="chart-funnel"],
+  .u-chart-grid[data-overview-layout="funnel-chart"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .u-chart-grid .u-horizontal-funnel {
+    min-width: 0;
+  }
+  .u-chart-grid .u-flow-plot {
+    height: 205px;
+  }
+  .u-chart-grid .u-flow-rates span {
+    font-size: 18px;
+    padding: 4px 6px;
+  }
+  .u-chart-grid .u-flow-labels li {
+    padding: 0 6px;
+  }
+  .u-chart-grid .u-flow-labels strong {
+    font-size: 23px;
+  }
+  .u-chart-grid .u-flow-labels span {
+    font-size: 10px;
+    letter-spacing: 0.3px;
+  }
+}
+@media (max-width: 700px) {
+  .u-heading-actions .u-layout-trigger {
+    flex-basis: 100%;
+  }
+}
 .u-table .u-selection-cell {
   position: sticky;
   left: 0;
