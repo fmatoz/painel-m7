@@ -5,9 +5,11 @@ Painel privado em `/utm7`, no mesmo projeto do Painel M7. O login existente é p
 ## Funcionalidades
 
 - Visão geral: receita confirmada, investimento, lucro estimado, CPA, ROAS e ROI.
-- Campanhas, conjuntos e anúncios: navegação por nível, filtro de oferta/conta/período, busca, ordenação, seleção de colunas e CSV.
+- Campanhas, conjuntos e anúncios: navegação por nível, filtro de oferta/conta/período, busca, ordenação e CSV. “Somente ativos” usa o status efetivo da Meta, excluindo pausas herdadas e eventos sem status; não altera a veiculação na Meta. O filtro afeta a tabela e seus totais, preservando a visão geral do período.
+- Colunas configuráveis em janela: arrastar ou mover por setas, exibir/ocultar e restaurar o padrão. Nome fixo à esquerda; veiculação e orçamento também podem ser reposicionados. Cabeçalho, linhas, totais e CSV seguem a mesma ordem. Preferências salvas no navegador, com migração da seleção anterior.
+- Tema escuro por padrão, alternância para claro e preferência persistente. Paleta roxa/azul e símbolo oficial da M7 já presente no projeto; estilos limitados ao UTM7 e suas janelas.
 - Métricas: orçamento diário, status, compras, CPA, reproduções de 3s, taxa de gancho, frequência, gasto, impressões, CPM, cliques no link, CPC, CTR, visualizações de LP da Meta e seus custos/taxas, visitas únicas registradas, IC e custo por IC.
-- Funil de compra e marcos da VSL: play, 25%, 50%, 75% e conclusão.
+- Funil gráfico de compra em quatro etapas, com volumes e taxas de IC/aprovação, e marcos da VSL: play, 25%, 50%, 75% e conclusão. As faixas ilustram a sequência, sem fabricar proporcionalidade entre cliques da Meta e visitas de todas as fontes; etapas zeradas permanecem identificadas.
 - Cadastro persistente de ofertas: produto, preço de referência, custo por venda, links, pixel, nomes recebidos na planilha e IDs das campanhas. Arquivar não apaga histórico.
 - Cadastro de contas Meta por ID e token da Marketing API. O token fica em armazenamento privado no servidor e não é retornado à interface.
 - Orçamento diário de conjunto (ABO): confirmação explícita, conferência do valor atual na Meta, validação de conta e conjunto, idempotência por solicitação e histórico. Não converte CBO/orçamento vitalício nem muda status.
@@ -67,7 +69,7 @@ Históricos de sucesso/erro da API em produção estão desativados, evitando re
 
 ## Verificação — 26/11/2026
 
-- 79 testes Node passaram: regressão do M7, cálculos, datas, deduplicação, diagnósticos, atribuição, taxas, estornos, guardas de orçamento e sete casos de identidade/permissão do UTM7.
+- 84 testes Node passaram: regressão do M7, cálculos, datas, deduplicação, diagnósticos, atribuição, taxas, estornos, guardas de orçamento, sete casos de identidade/permissão e cinco casos de preferências, filtro/totais e contraste do UTM7.
 - TypeScript e build de produção passaram.
 - Fontes reais: leitura do Sheets, consulta da conta Meta e dos cinco conjuntos/anúncios, sincronização e persistência do cache, dashboard autorizado executado internamente por MCP.
 - SQL real com transação revertida: negação sem administrador, ausência de token na resposta, exigência de confirmação, rejeição de pixel inválido, deduplicação da solicitação, preservação de token vazio na edição e revogação de acesso público. Nenhum registro de QA de orçamento foi mantido.
@@ -76,5 +78,6 @@ Históricos de sucesso/erro da API em produção estão desativados, evitando re
 - As chamadas de escrita da Meta nos testes de interface foram simuladas. Não se alteraram orçamentos reais apenas para testar. O caminho de escrita exige confirmação no painel e será confirmado pela API da Meta quando utilizado.
 - O teste visual autenticado usa uma sessão simulada e agregados reais, somente no ambiente de QA. Não se criou login temporário nem se extraiu a sessão do navegador pessoal. Esse teste inicial não detectou a divergência de IDs porque o SQL de QA usava o cadastro legado. A regressão agora usa o ID atual verificado independentemente, rejeita o ID legado, testa expiração/revogação e reverte as alterações de QA.
 - Após publicar a correção, uma requisição real do login existente passou pela validação da sessão e do perfil ativo; confirmada por `verified_at` no armazenamento privado, sem capturar o JWT nem habilitar históricos com dados sensíveis.
+- Atualização visual: Chromium isolado em desktop e celular verificou arraste, setas, visibilidade, persistência, ordem equivalente no CSV, filtro de ativos e totais recalculados, alternância de tema nas janelas e funil gráfico. Sessão/fontes simuladas para testar a interface sem escrever em anúncios ou controlar o navegador pessoal. Teste de contraste verifica as cores de texto/estado contra os três fundos em ambos os temas (mínimo 4,5:1).
 
 O gerador `n8n/build-utm7-workflow.mjs` produz `n8n/utm7-api.workflow.js` para validar no SDK do n8n. Após alterações no motor ou nas guardas, regenere o fluxo e atualize os respectivos Code nodes. Não importe o fluxo gerado como novo workflow a cada alteração: mantenha o ID ativo.

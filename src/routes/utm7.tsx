@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useId } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   ArrowUpRight,
   BarChart3,
   ChevronRight,
@@ -13,11 +15,14 @@ import {
   ExternalLink,
   Filter,
   FolderHeart,
+  GripVertical,
   Layers3,
   Loader2,
   LogOut,
   Menu,
   MousePointer2,
+  Moon,
+  Sun,
   Pencil,
   Plus,
   RefreshCw,
@@ -44,6 +49,13 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppAccess } from "@/hooks/use-access";
 import { utm7Api } from "@/lib/utm7-api";
+import {
+  columnPreferences,
+  moveColumn,
+  filterMetricRows,
+  summarizeMetricRows,
+  type ColumnPreferences,
+} from "@/lib/utm7-view.mjs";
 import type {
   DashboardData,
   Level,
@@ -95,6 +107,14 @@ type Column = {
   help?: string;
 };
 const columns: Column[] = [
+  { key: "status", label: "Veiculação", format: statusLabel },
+  {
+    key: "budgetMinor",
+    label: "Orçamento/dia",
+    format: (n) => (n == null ? "—" : money(n / 100)),
+    meta: true,
+    help: "Disponível no nível de conjuntos de anúncios.",
+  },
   { key: "spend", label: "Investimento", format: money, meta: true },
   {
     key: "purchases",
@@ -179,6 +199,8 @@ const columns: Column[] = [
   },
 ];
 const defaultCols = [
+  "status",
+  "budgetMinor",
   "spend",
   "purchases",
   "cpa",
@@ -217,8 +239,16 @@ function Utm7() {
     key: "spend",
     direction: -1,
   });
-  const [visibleCols, setVisibleCols] = useState<string[]>(defaultCols),
-    [colDialog, setColDialog] = useState(false),
+  const [columnPrefs, setColumnPrefs] = useState<ColumnPreferences>(() =>
+    columnPreferences(
+      null,
+      columns.map((c) => c.key),
+      defaultCols,
+    ),
+  );
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [activeOnly, setActiveOnly] = useState(false);
+  const [colDialog, setColDialog] = useState(false),
     [syncing, setSyncing] = useState(false);
   const [offerEdit, setOfferEdit] = useState<Partial<UtmOffer> | null>(null),
     [connEdit, setConnEdit] = useState<Partial<UtmConnection> | null>(null);
@@ -227,9 +257,23 @@ function Utm7() {
   const [showHelp, setShowHelp] = useState(false);
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("utm7:columns:v1") || "null");
-      if (Array.isArray(saved) && saved.some((k) => columns.some((c) => c.key === k)))
-        setVisibleCols(saved.filter((k) => columns.some((c) => c.key === k)));
+      const saved = JSON.parse(localStorage.getItem("utm7:columns:v2") || "null");
+      const legacy = JSON.parse(localStorage.getItem("utm7:columns:v1") || "null");
+      setColumnPrefs(
+        columnPreferences(
+          saved ||
+            (Array.isArray(legacy)
+              ? {
+                  order: ["status", "budgetMinor", ...legacy],
+                  visible: ["status", "budgetMinor", ...legacy],
+                }
+              : null),
+          columns.map((c) => c.key),
+          defaultCols,
+        ),
+      );
+      setTheme(localStorage.getItem("utm7:theme") === "light" ? "light" : "dark");
+      setActiveOnly(localStorage.getItem("utm7:active-only") === "true");
     } catch {}
   }, []);
   useEffect(() => {
@@ -323,17 +367,22 @@ function Utm7() {
       setSaving(false);
     }
   };
-  const filtered = (data?.tables[level] ?? [])
-    .filter((r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.id.includes(search))
-    .sort((a, b) => {
-      const av = a[sort.key],
-        bv = b[sort.key];
-      return (
-        (typeof av === "number" && typeof bv === "number"
-          ? av - bv
-          : String(av ?? "").localeCompare(String(bv ?? ""))) * sort.direction
-      );
-    });
+  const orderedColumns = columnPrefs.order
+    .map((key) => columns.find((c) => c.key === key)!)
+    .filter(
+      (c) =>
+        c && columnPrefs.visible.includes(c.key) && (c.key !== "budgetMinor" || level === "adset"),
+    );
+  const filtered = filterMetricRows(data?.tables[level] ?? [], search, activeOnly).sort((a, b) => {
+    const av = a[sort.key],
+      bv = b[sort.key];
+    return (
+      (typeof av === "number" && typeof bv === "number"
+        ? av - bv
+        : String(av ?? "").localeCompare(String(bv ?? ""))) * sort.direction
+    );
+  });
+  const filteredTotals = summarizeMetricRows(filtered);
   const changeLevel = (next: Level) => {
     setLevel(next);
     setTab("campaigns");
@@ -359,18 +408,17 @@ function Utm7() {
     setAdsetId("");
   };
   const exportCsv = () => {
-    const cs = columns.filter((c) => visibleCols.includes(c.key));
+    const cs = orderedColumns;
     const cell = (v: unknown) => {
       let s = String(v ?? "");
       if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
       return '"' + s.replace(/"/g, '""') + '"';
     };
     const lines = [
-      ["Nome", "ID", "Status", ...cs.map((c) => c.label)],
+      ["Nome", "ID", ...cs.map((c) => c.label)],
       ...filtered.map((r) => [
         r.name,
         r.id,
-        statusLabel(r.status),
         ...cs.map((c) => (c.meta && !hasMeta ? "" : c.format(r[c.key]))),
       ]),
     ];
@@ -401,14 +449,14 @@ function Utm7() {
       </div>
     );
   return (
-    <div className="utm7-app">
+    <div className="utm7-app" data-u-theme={theme}>
       {menu && (
         <button className="u-overlay" aria-label="Fechar menu" onClick={() => setMenu(false)} />
       )}
       <aside className={`u-sidebar ${menu ? "u-open" : ""}`}>
         <a href="/utm7" className="u-brand">
           <span className="u-brand-mark">
-            <Target size={25} />
+            <M7Mark />
           </span>
           <span>
             utm<span>7</span>
@@ -480,6 +528,20 @@ function Utm7() {
             <strong>{nav.find((n) => n.id === tab)?.label}</strong>
           </div>
           <div className="u-top-right">
+            <button
+              className="u-theme-toggle"
+              aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+              onClick={() => {
+                const next = theme === "dark" ? "light" : "dark";
+                setTheme(next);
+                try {
+                  localStorage.setItem("utm7:theme", next);
+                } catch {}
+              }}
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+              <span>{theme === "dark" ? "Tema claro" : "Tema escuro"}</span>
+            </button>
             <span className="u-access">
               <ShieldCheck size={14} />
               Acesso privado
@@ -723,26 +785,26 @@ function Utm7() {
                           >
                             <defs>
                               <linearGradient id="uRevenue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#18b77d" stopOpacity={0.2} />
-                                <stop offset="100%" stopColor="#18b77d" stopOpacity={0} />
+                                <stop offset="0%" stopColor="#37cfa0" stopOpacity={0.2} />
+                                <stop offset="100%" stopColor="#37cfa0" stopOpacity={0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid
-                              stroke="#eceef3"
+                              stroke="var(--u-line)"
                               strokeDasharray="4 4"
                               vertical={false}
                             />
                             <XAxis
                               dataKey="date"
                               tickFormatter={dayLabel}
-                              tick={{ fill: "#8b93a5", fontSize: 11 }}
+                              tick={{ fill: "var(--u-muted)", fontSize: 11 }}
                               axisLine={false}
                               tickLine={false}
                             />
                             <YAxis
                               width={53}
                               tickFormatter={(v) => `R$ ${v}`}
-                              tick={{ fill: "#8b93a5", fontSize: 11 }}
+                              tick={{ fill: "var(--u-muted)", fontSize: 11 }}
                               axisLine={false}
                               tickLine={false}
                             />
@@ -754,14 +816,16 @@ function Utm7() {
                               labelFormatter={dayLabel}
                               contentStyle={{
                                 borderRadius: 10,
-                                border: "1px solid #e7e9f0",
+                                border: "1px solid var(--u-line)",
+                                background: "var(--u-card)",
+                                color: "var(--u-ink)",
                                 fontSize: 12,
                               }}
                             />
                             <Area
                               type="monotone"
                               dataKey="revenue"
-                              stroke="#16a875"
+                              stroke="#37cfa0"
                               strokeWidth={2.5}
                               fill="url(#uRevenue)"
                               isAnimationActive={false}
@@ -770,7 +834,7 @@ function Utm7() {
                               <Area
                                 type="monotone"
                                 dataKey="spend"
-                                stroke="#8b6ed9"
+                                stroke="#a879ff"
                                 strokeWidth={2}
                                 fill="transparent"
                                 isAnimationActive={false}
@@ -791,7 +855,7 @@ function Utm7() {
                     </section>
                     <section className="u-panel">
                       <PanelTitle
-                        title="Seu funil, sem atalhos"
+                        title="Funil de conversão"
                         sub="Da visita ao pagamento aprovado"
                       />
                       <MiniFunnel metrics={m!} hasMeta={hasMeta} />
@@ -890,11 +954,24 @@ function Utm7() {
                             : l === "adset"
                               ? "Conjuntos"
                               : "Anúncios"}
-                          <span>{data.tables[l].length}</span>
+                          <span>{filterMetricRows(data.tables[l], "", activeOnly).length}</span>
                         </button>
                       ))}
                     </div>
                     <div className="u-table-actions">
+                      <label className={`u-active-filter ${activeOnly ? "selected" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={activeOnly}
+                          onChange={(e) => {
+                            setActiveOnly(e.target.checked);
+                            try {
+                              localStorage.setItem("utm7:active-only", String(e.target.checked));
+                            } catch {}
+                          }}
+                        />{" "}
+                        Somente ativos
+                      </label>
                       <label className="u-search">
                         <Search size={15} />
                         <input
@@ -945,25 +1022,21 @@ function Utm7() {
                               <ChevronsUpDown size={13} />
                             </button>
                           </th>
-                          <th>Veiculação</th>
-                          {level === "adset" && <th>Orçamento/dia</th>}
-                          {columns
-                            .filter((c) => visibleCols.includes(c.key))
-                            .map((c) => (
-                              <th key={c.key} title={c.help}>
-                                <button
-                                  onClick={() =>
-                                    setSort({
-                                      key: c.key,
-                                      direction: sort.key === c.key ? -sort.direction : -1,
-                                    })
-                                  }
-                                >
-                                  {c.label}
-                                  <ChevronsUpDown size={12} />
-                                </button>
-                              </th>
-                            ))}
+                          {orderedColumns.map((c) => (
+                            <th key={c.key} title={c.help}>
+                              <button
+                                onClick={() =>
+                                  setSort({
+                                    key: c.key,
+                                    direction: sort.key === c.key ? -sort.direction : -1,
+                                  })
+                                }
+                              >
+                                {c.label}
+                                <ChevronsUpDown size={12} />
+                              </button>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
@@ -984,43 +1057,43 @@ function Utm7() {
                                 {r.id === "unattributed" ? "Eventos sem IDs de anúncio" : r.id}
                               </small>
                             </td>
-                            <td>
-                              <span className={`u-status ${r.status === "ACTIVE" ? "active" : ""}`}>
-                                {statusLabel(r.status)}
-                              </span>
-                            </td>
-                            {level === "adset" && (
-                              <td>
-                                <button
-                                  className="u-budget"
-                                  onClick={() => setBudget(r)}
-                                  disabled={!hasMeta || !r.budgetMinor || !connectionId}
-                                >
-                                  {r.budgetMinor ? money(r.budgetMinor / 100) : "—"}
-                                  {Boolean(r.budgetMinor) && <Pencil size={12} />}
-                                </button>
+                            {orderedColumns.map((c) => (
+                              <td
+                                key={c.key}
+                                className={
+                                  c.key === "roi" && typeof r.roi === "number"
+                                    ? r.roi >= 0
+                                      ? "u-positive"
+                                      : "u-negative"
+                                    : ""
+                                }
+                              >
+                                {c.key === "status" ? (
+                                  <span
+                                    className={`u-status ${r.status === "ACTIVE" ? "active" : ""}`}
+                                  >
+                                    {statusLabel(r.status)}
+                                  </span>
+                                ) : c.key === "budgetMinor" ? (
+                                  <button
+                                    className="u-budget"
+                                    onClick={() => setBudget(r)}
+                                    disabled={!hasMeta || !r.budgetMinor || !connectionId}
+                                  >
+                                    {r.budgetMinor ? money(r.budgetMinor / 100) : "—"}
+                                    {Boolean(r.budgetMinor) && <Pencil size={12} />}
+                                  </button>
+                                ) : c.meta && !hasMeta ? (
+                                  "—"
+                                ) : (
+                                  c.format(r[c.key])
+                                )}
                               </td>
-                            )}
-                            {columns
-                              .filter((c) => visibleCols.includes(c.key))
-                              .map((c) => (
-                                <td
-                                  key={c.key}
-                                  className={
-                                    c.key === "roi" && typeof r.roi === "number"
-                                      ? r.roi >= 0
-                                        ? "u-positive"
-                                        : "u-negative"
-                                      : ""
-                                  }
-                                >
-                                  {c.meta && !hasMeta ? "—" : c.format(r[c.key])}
-                                </td>
-                              ))}
+                            ))}
                           </tr>
                         ))}
                       </tbody>
-                      {filtered.length > 0 && !search.trim() && (
+                      {filtered.length > 0 && (
                         <tfoot>
                           <tr>
                             <td className="u-sticky">
@@ -1031,26 +1104,19 @@ function Utm7() {
                                   ? "conjuntos"
                                   : "campanhas"}
                             </td>
-                            <td>Totais do período</td>
-                            {level === "adset" && (
-                              <td>
-                                {money(
-                                  filtered.reduce((a, r) => a + Number(r.budgetMinor || 0), 0) /
-                                    100,
-                                )}
-                              </td>
-                            )}
-                            {columns
-                              .filter((c) => visibleCols.includes(c.key))
-                              .map((c) => (
-                                <td key={c.key}>
-                                  {c.key === "frequency"
+                            {orderedColumns.map((c) => (
+                              <td key={c.key}>
+                                {c.key === "status"
+                                  ? "Totais exibidos"
+                                  : c.key === "frequency"
                                     ? "—"
                                     : c.meta && !hasMeta
                                       ? "—"
-                                      : c.format(m![c.key as keyof Metrics])}
-                                </td>
-                              ))}
+                                      : c.format(
+                                          filteredTotals[c.key as keyof typeof filteredTotals],
+                                        )}
+                              </td>
+                            ))}
                           </tr>
                         </tfoot>
                       )}
@@ -1063,8 +1129,8 @@ function Utm7() {
                     )}
                   </div>
                   <div className="u-table-footnote">
-                    Compras e receita: Sheets · Mídia: Meta Ads · Custos e taxas recalculados a
-                    partir dos totais. {query.isFetching ? "Atualizando…" : ""}
+                    Totais das linhas exibidas · Compras e receita: Sheets · Mídia: Meta Ads.{" "}
+                    {query.isFetching ? "Atualizando…" : ""}
                   </div>
                 </section>
               )}
@@ -1393,36 +1459,26 @@ function Utm7() {
         </div>
       </main>
       <Dialog open={colDialog} onOpenChange={setColDialog}>
-        <DialogContent className="u-dialog">
+        <DialogContent data-u-theme={theme} className="u-dialog">
           <DialogTitle>Suas colunas, do seu jeito</DialogTitle>
           <DialogDescription>
-            Escolha as métricas da tabela. A preferência fica salva neste navegador.
+            Arraste para mudar a ordem ou use as setas. Marque as colunas que quer ver. O nome
+            permanece fixo à esquerda.
           </DialogDescription>
-          <div className="u-column-grid">
-            {columns.map((c) => (
-              <label key={c.key}>
-                <input
-                  type="checkbox"
-                  checked={visibleCols.includes(c.key)}
-                  onChange={(e) => {
-                    const next = e.target.checked
-                      ? [...visibleCols, c.key]
-                      : visibleCols.filter((k) => k !== c.key);
-                    setVisibleCols(next);
-                    localStorage.setItem("utm7:columns:v1", JSON.stringify(next));
-                  }}
-                />
-                {c.label}
-              </label>
-            ))}
-          </div>
-          <button className="u-button u-primary u-full" onClick={() => setColDialog(false)}>
-            Aplicar colunas
-          </button>
+          <ColumnEditor
+            value={columnPrefs}
+            onApply={(next) => {
+              setColumnPrefs(next);
+              try {
+                localStorage.setItem("utm7:columns:v2", JSON.stringify(next));
+              } catch {}
+              setColDialog(false);
+            }}
+          />
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(offerEdit)} onOpenChange={(open) => !open && setOfferEdit(null)}>
-        <DialogContent className="u-dialog u-dialog-wide">
+        <DialogContent data-u-theme={theme} className="u-dialog u-dialog-wide">
           <DialogTitle>{offerEdit?.id ? "Editar oferta" : "Nova oferta"}</DialogTitle>
           <DialogDescription>
             Associe o produto aos nomes recebidos no Sheets e aos IDs das campanhas.
@@ -1439,7 +1495,7 @@ function Utm7() {
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(connEdit)} onOpenChange={(open) => !open && setConnEdit(null)}>
-        <DialogContent className="u-dialog">
+        <DialogContent data-u-theme={theme} className="u-dialog">
           <DialogTitle>{connEdit?.id ? "Editar conexão Meta" : "Conectar conta Meta"}</DialogTitle>
           <DialogDescription>
             Dados enviados pela sessão privada do M7. O token não é salvo no navegador.
@@ -1456,7 +1512,7 @@ function Utm7() {
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(budget)} onOpenChange={(open) => !open && !saving && setBudget(null)}>
-        <DialogContent className="u-dialog">
+        <DialogContent data-u-theme={theme} className="u-dialog">
           <DialogTitle>Alterar orçamento diário</DialogTitle>
           <DialogDescription>
             Esta ação altera o orçamento real na Meta. Confira o conjunto e o novo gasto diário
@@ -1485,7 +1541,7 @@ function Utm7() {
         </DialogContent>
       </Dialog>
       <Dialog open={showHelp} onOpenChange={setShowHelp}>
-        <DialogContent className="u-dialog">
+        <DialogContent data-u-theme={theme} className="u-dialog">
           <DialogTitle>Os números por trás do painel</DialogTitle>
           <DialogDescription>Fontes e critérios para comparar os resultados.</DialogDescription>
           <div className="u-help">
@@ -1521,6 +1577,126 @@ function Utm7() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function M7Mark() {
+  return <img src="/icon-192.png" alt="Gestão M7" width={46} height={46} />;
+}
+
+function ColumnEditor({
+  value,
+  onApply,
+}: {
+  value: ColumnPreferences;
+  onApply: (next: ColumnPreferences) => void;
+}) {
+  const [draft, setDraft] = useState(() => ({
+    order: [...value.order],
+    visible: [...value.visible],
+  }));
+  const [dragged, setDragged] = useState("");
+  const [announcement, setAnnouncement] = useState("");
+  const move = (key: string, target: string) => {
+    setDraft((prev) => ({ ...prev, order: moveColumn(prev.order, key, target) }));
+    setAnnouncement(`${columns.find((c) => c.key === key)?.label} movida.`);
+  };
+  return (
+    <>
+      <div className="u-column-summary">
+        <span>{draft.visible.length} colunas selecionadas</span>
+        <button
+          className="u-text-button"
+          onClick={() =>
+            setDraft(
+              columnPreferences(
+                null,
+                columns.map((c) => c.key),
+                defaultCols,
+              ),
+            )
+          }
+        >
+          Restaurar padrão
+        </button>
+      </div>
+      <ol className="u-column-list" aria-label="Ordem das colunas">
+        {draft.order.map((key, index) => {
+          const column = columns.find((c) => c.key === key)!;
+          return (
+            <li
+              key={key}
+              data-column={key}
+              className={dragged === key ? "u-dragging" : ""}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                move(e.dataTransfer.getData("text/utm7-column"), key);
+                setDragged("");
+              }}
+            >
+              <button
+                className="u-drag-handle"
+                draggable
+                aria-label={`Arrastar ${column.label}`}
+                title="Arraste para reordenar"
+                onDragStart={(e) => {
+                  setDragged(key);
+                  e.dataTransfer.setData("text/utm7-column", key);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={() => setDragged("")}
+              >
+                <GripVertical size={17} />
+              </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={draft.visible.includes(key)}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      visible: e.target.checked
+                        ? [...prev.visible, key]
+                        : prev.visible.filter((k) => k !== key),
+                    }))
+                  }
+                />
+                <span>
+                  {column.label}
+                  {key === "budgetMinor" && <small>Somente em conjuntos</small>}
+                </span>
+              </label>
+              <div className="u-column-arrows">
+                <button
+                  aria-label={`Mover ${column.label} para cima`}
+                  disabled={index === 0}
+                  onClick={() => move(key, draft.order[index - 1])}
+                >
+                  <ArrowUp size={15} />
+                </button>
+                <button
+                  aria-label={`Mover ${column.label} para baixo`}
+                  disabled={index === draft.order.length - 1}
+                  onClick={() => move(key, draft.order[index + 1])}
+                >
+                  <ArrowDown size={15} />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <span className="sr-only" aria-live="polite">
+        {announcement}
+      </span>
+      <button className="u-button u-primary u-full" onClick={() => onApply(draft)}>
+        Aplicar colunas
+      </button>
+    </>
   );
 }
 
@@ -1595,41 +1771,86 @@ function Empty({ title, text }: { title: string; text: string }) {
   );
 }
 function MiniFunnel({ metrics: m, hasMeta }: { metrics: Metrics; hasMeta: boolean }) {
+  const gradientId = useId().replace(/:/g, "");
   const rows = [
     { label: "Cliques no link", value: hasMeta ? m.clicks : null, color: "purple" },
     { label: "Visitas únicas/dia", value: m.visitors, color: "blue" },
     { label: "Compras iniciadas", value: m.checkouts, color: "teal" },
     { label: "Compras aprovadas", value: m.purchases, color: "green" },
   ];
+  const shades = [
+    ["#b925df", "#7757e8"],
+    ["#7953e2", "#317ed8"],
+    ["#2872bd", "#178e9d"],
+    ["#147466", "#16795e"],
+  ];
   return (
-    <div className="u-mini-funnel">
-      {rows.map((r, i) => {
-        const prev = rows[i - 1]?.value;
-        return (
-          <div key={r.label}>
-            <div>
-              <span>{r.label}</span>
-              <strong>{integer(r.value)}</strong>
-            </div>
-            <div className="u-funnel-track">
-              <i
-                className={`u-${r.color}`}
-                style={{
-                  width: `${r.value ? Math.max(2, Math.min(100, (r.value / Math.max(1, ...rows.map((stage) => stage.value || 0))) * 100)) : 0}%`,
-                }}
-              />
-            </div>
-            {i > 0 && (
-              <small>
-                {prev && r.value != null
-                  ? pct((r.value / prev) * 100) + " da etapa anterior"
-                  : "Sem base para calcular a taxa"}
-              </small>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <figure className="u-graphic-funnel">
+      <div className="u-funnel-drawing">
+        <svg
+          viewBox="0 0 140 316"
+          role="img"
+          aria-label={rows.map((r) => `${r.label}: ${integer(r.value)}`).join("; ")}
+        >
+          <defs>
+            {shades.map(([a, b], i) => (
+              <linearGradient key={i} id={`${gradientId}-${i}`} x1="0" x2="1" y1="0" y2="1">
+                <stop stopColor={a} />
+                <stop offset="1" stopColor={b} />
+              </linearGradient>
+            ))}
+          </defs>
+          {rows.map((r, i) => {
+            const inset = 8 + i * 11,
+              y = 12 + i * 75;
+            return (
+              <g key={r.label} className={r.value ? "" : "u-funnel-zero"}>
+                <path
+                  d={`M${inset},${y} H${140 - inset} L${129 - inset},${y + 63} Q70,${y + 76} ${inset + 11},${y + 63} Z`}
+                  fill={r.value ? `url(#${gradientId}-${i})` : "var(--u-surface)"}
+                />
+                <text
+                  x="70"
+                  y={y + 37}
+                  textAnchor="middle"
+                  style={{
+                    fontSize: Math.max(9, 23 - Math.max(0, integer(r.value).length - 3) * 2),
+                  }}
+                >
+                  {integer(r.value)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        <ol className="u-funnel-stages">
+          {rows.map((r, i) => {
+            const prev = rows[i - 1]?.value;
+            return (
+              <li key={r.label}>
+                <span className={`u-stage-dot u-${r.color}`} />
+                <div>
+                  <span>{r.label}</span>
+                  <strong>{integer(r.value)}</strong>
+                  <small>
+                    {i === 0
+                      ? "Fonte: Meta Ads"
+                      : i === 1
+                        ? "Todos os acessos identificados"
+                        : prev && r.value != null
+                          ? `${pct((r.value / prev) * 100)} da etapa anterior`
+                          : "Sem base de conversão"}
+                  </small>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <figcaption>
+        Cliques da Meta; visitas incluem outros acessos. As faixas mostram a sequência das etapas.
+      </figcaption>
+    </figure>
   );
 }
 function OfferForm({
