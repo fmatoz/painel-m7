@@ -18,6 +18,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MateriaisRouteImport } from './routes/materiais'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
+import { Route as Utm7RouteImport } from './routes/utm7'
 import { Route as VendasRouteImport } from './routes/vendas'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
@@ -69,6 +70,11 @@ const UsuariosRoute = UsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Utm7Route = Utm7RouteImport.update({
+  id: '/utm7',
+  path: '/utm7',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VendasRoute = VendasRouteImport.update({
   id: '/vendas',
   path: '/vendas',
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/materiais': typeof MateriaisRoute
   '/mcp': typeof McpRoute
   '/usuarios': typeof UsuariosRoute
+  '/utm7': typeof Utm7Route
   '/vendas': typeof VendasRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/materiais': typeof MateriaisRoute
   '/mcp': typeof McpRoute
   '/usuarios': typeof UsuariosRoute
+  '/utm7': typeof Utm7Route
   '/vendas': typeof VendasRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/materiais': typeof MateriaisRoute
   '/mcp': typeof McpRoute
   '/usuarios': typeof UsuariosRoute
+  '/utm7': typeof Utm7Route
   '/vendas': typeof VendasRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/materiais'
     | '/mcp'
     | '/usuarios'
+    | '/utm7'
     | '/vendas'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/materiais'
     | '/mcp'
     | '/usuarios'
+    | '/utm7'
     | '/vendas'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/materiais'
     | '/mcp'
     | '/usuarios'
+    | '/utm7'
     | '/vendas'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -208,6 +220,7 @@ export interface RootRouteChildren {
   MateriaisRoute: typeof MateriaisRoute
   McpRoute: typeof McpRoute
   UsuariosRoute: typeof UsuariosRoute
+  Utm7Route: typeof Utm7Route
   VendasRoute: typeof VendasRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -280,6 +293,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UsuariosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/utm7': {
+      id: '/utm7'
+      path: '/utm7'
+      fullPath: '/utm7'
+      preLoaderRoute: typeof Utm7RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vendas': {
       id: '/vendas'
       path: '/vendas'
@@ -328,6 +348,7 @@ const rootRouteChildren: RootRouteChildren = {
   MateriaisRoute: MateriaisRoute,
   McpRoute: McpRoute,
   UsuariosRoute: UsuariosRoute,
+  Utm7Route: Utm7Route,
   VendasRoute: VendasRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:

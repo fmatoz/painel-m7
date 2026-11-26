@@ -4,6 +4,7 @@ import {
   Columns3,
   Home,
   LayoutDashboard,
+  Target,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -61,6 +62,13 @@ const items = [
     href: "/usuarios",
     label: "Usuários",
     icon: Users,
+  },
+  {
+    id: "utm7" as const,
+    area: "usuarios" as const,
+    href: "/utm7",
+    label: "UTM7",
+    icon: Target,
   },
 ];
 

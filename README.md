@@ -1,5 +1,7 @@
 # Welcome to your Lovable project
 
+O módulo privado **UTM7** está disponível em `/utm7`, com o login existente do M7. Veja [fontes, métricas, configuração e validação](docs/utm7.md).
+
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable

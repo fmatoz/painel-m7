@@ -12,6 +12,7 @@ dist
 dist-ssr
 .env
 .workspace/
+.workspace-*
 .output
 .vinxi
 .tanstack/**
