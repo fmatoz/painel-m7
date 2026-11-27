@@ -2496,3 +2496,43 @@ body:has(.utm7-app[data-u-theme="dark"]) [data-sonner-toast][data-type="error"] 
 
 .u-auth-page{min-height:100dvh;display:grid;place-items:center;padding:24px;background:#0d1019;color:#f1f3fb}.u-auth-card{width:min(100%,420px);padding:36px;border:1px solid #32394f;border-radius:20px;background:#161a28;display:grid;gap:20px;box-shadow:0 28px 90px #0005}.u-auth-logo{font-size:36px;font-weight:850;letter-spacing:-2px}.u-auth-logo span{color:#b16cff}.u-auth-card h1{font-size:23px;font-weight:700;margin:0}.u-auth-card p{color:#aeb8d0;line-height:1.6;margin:0}.u-auth-card label{display:grid;gap:8px;font-size:14px}.u-auth-card input{width:100%;padding:12px 14px;border:1px solid #414b68;border-radius:9px;background:#0e1220;color:#fff}.u-auth-card button{border-radius:9px;padding:13px 16px;color:white;background:linear-gradient(110deg,#8f30d8,#315fe9);font-weight:700}.u-auth-card button:disabled{opacity:.6}.u-auth-card a{color:#bd9bf8;text-align:center;font-size:13px}.u-auth-card .u-auth-error{color:#ffb3bb}.u-auth-card :focus-visible{outline:2px solid #ba8aff;outline-offset:3px}
 
+
+/* Keep every funnel stage visible on phones and tablets. */
+@media (max-width: 1150px) {
+  .u-graphic-funnel .u-horizontal-scroll {
+    overflow-x: hidden;
+    padding-bottom: 0;
+  }
+  .u-graphic-funnel .u-horizontal-funnel {
+    min-width: 0;
+  }
+  .u-graphic-funnel .u-flow-plot {
+    height: clamp(112px, 27vw, 205px);
+  }
+  .u-graphic-funnel .u-flow-rates > div,
+  .u-graphic-funnel .u-flow-labels li {
+    min-width: 0;
+  }
+  .u-graphic-funnel .u-flow-rates span,
+  .u-graphic-funnel .u-flow-rates .u-flow-small {
+    display: inline-block;
+    max-width: 100%;
+    font-size: clamp(8px, 2vw, 18px);
+    padding: 2px;
+    border-radius: 4px;
+  }
+  .u-graphic-funnel .u-flow-labels li {
+    gap: 3px;
+    padding: 0 2px;
+  }
+  .u-graphic-funnel .u-flow-labels strong {
+    font-size: clamp(11px, 3vw, 23px);
+    overflow-wrap: anywhere;
+  }
+  .u-graphic-funnel .u-flow-labels span {
+    font-size: clamp(7px, 1.6vw, 11px);
+    line-height: 1.35;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+}
